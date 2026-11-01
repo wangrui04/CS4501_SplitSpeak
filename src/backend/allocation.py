@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 import re
 
@@ -10,6 +10,16 @@ class UnknownNameError(ValueError):
     def __init__(self, name):
         self.name = name
         super().__init__(f"Unknown group member: {name}")
+
+
+class MissingChargeMethodError(ValueError):
+    def __init__(self, message="Tax/tip method missing"):
+        super().__init__(message)
+
+
+class MissingChargeAmountError(ValueError):
+    def __init__(self, message="Missing charge amount or percentage"):
+        super().__init__(message)
 
 
 _MONEY = re.compile(
@@ -195,3 +205,84 @@ def allocate_items(
         "shares": shares,
         "lineItems": line_items,
     }
+
+
+def allocate_charges(
+    charges: list,
+    allocation: dict,
+    payer: str,
+    roster: list[str],
+) -> dict:
+    subtotal_cents = allocation.get("totalCents", 0)
+    current_shares = dict(allocation.get("shares", {name: 0 for name in roster}))
+    base_item_shares = dict(allocation.get("shares", {name: 0 for name in roster}))
+    line_items = list(allocation.get("lineItems", []))
+    allocated_charges = []
+    total_cents = subtotal_cents
+
+    for raw in charges:
+        charge = raw.model_dump() if hasattr(raw, "model_dump") else dict(raw)
+
+        method = charge.get("method")
+        if not method or method not in ("equal", "proportional"):
+            raise MissingChargeMethodError("Should tax or tip be split equally or proportionally?")
+
+        amount = charge.get("amount")
+        percent = charge.get("percent")
+
+        if amount is not None and percent is not None:
+            raise ValueError("Charge cannot specify both amount and percent")
+
+        if amount is None and percent is None:
+            raise MissingChargeAmountError(f"How much was the {charge.get('kind', 'charge')}?")
+
+        if amount is not None:
+            charge_cents = parse_money_to_cents(amount)
+        else:
+            percentage = Decimal(str(percent))
+            charge_cents = int(
+                (Decimal(subtotal_cents) * percentage / 100).quantize(
+                    Decimal("1"),
+                    rounding=ROUND_HALF_UP,
+                )
+            )
+
+        active = [
+            name for name in roster
+            if base_item_shares.get(name, 0) > 0
+        ]
+        if not active:
+            active = list(roster)
+
+        if method == "proportional":
+            weights = [base_item_shares.get(name, 0) for name in active]
+            if sum(weights) == 0:
+                weights = [1] * len(active)
+        else:
+            weights = [1] * len(active)
+
+        splits = split_cents(
+            charge_cents,
+            weights,
+            active,
+            payer,
+            roster,
+        )
+
+        for name, cents in splits.items():
+            current_shares[name] = current_shares.get(name, 0) + cents
+
+        total_cents += charge_cents
+
+        charge_copy = dict(charge)
+        charge_copy["amountCents"] = charge_cents
+        charge_copy["shares"] = splits
+        allocated_charges.append(charge_copy)
+
+    return {
+        "totalCents": total_cents,
+        "shares": current_shares,
+        "lineItems": line_items,
+        "charges": allocated_charges,
+    }
+

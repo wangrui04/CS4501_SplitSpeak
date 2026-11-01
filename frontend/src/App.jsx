@@ -1,122 +1,218 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState, useEffect, useCallback } from 'react';
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import GroupView from './components/GroupView';
+import RightSidebar from './components/RightSidebar';
+import LoadingSpinner from './components/LoadingSpinner';
+import ErrorMessage from './components/ErrorMessage';
+import NamePicker from './components/NamePicker';
+import AddExpenseModal from './components/AddExpenseModal';
+import {
+  fetchGroups,
+  fetchGroupBalances,
+  fetchSession,
+  login,
+  logout,
+} from './api';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [balances, setBalances] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSwitchingUser, setIsSwitchingUser] = useState(false);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+
+  const loadUserGroups = useCallback(async () => {
+    setError(null);
+    try {
+      const groupsList = await fetchGroups();
+      setGroups(groupsList || []);
+      if (groupsList && groupsList.length > 0) {
+        setSelectedGroupId((prev) => (prev !== null ? prev : groupsList[0].id));
+      }
+    } catch (err) {
+      setError(
+        err.message || 'Failed to load groups. Please check your backend connection.'
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function initSession() {
+      try {
+        const session = await fetchSession();
+        if (!ignore && session && session.name) {
+          setCurrentUser(session.name);
+          const groupsList = await fetchGroups();
+          if (!ignore) {
+            setGroups(groupsList || []);
+            if (groupsList && groupsList.length > 0) {
+              setSelectedGroupId((prev) => (prev !== null ? prev : groupsList[0].id));
+            }
+          }
+        } else {
+          if (!ignore) {
+            setCurrentUser(null);
+          }
+        }
+      } catch (err) {
+        // If session check itself throws, treat as unauthenticated
+        // If session succeeded but fetchGroups failed, report error
+        if (!ignore) {
+          if (err && err.status === 401) {
+            setCurrentUser(null);
+          } else {
+            // Check if we have a session
+            try {
+              const check = await fetchSession();
+              if (check && check.name) {
+                setCurrentUser(check.name);
+                setError(err.message || 'Failed to load groups.');
+              } else {
+                setCurrentUser(null);
+              }
+            } catch {
+              setCurrentUser(null);
+            }
+          }
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    initSession();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedGroupId || !currentUser) return;
+
+    let isMounted = true;
+    fetchGroupBalances(selectedGroupId)
+      .then((data) => {
+        if (isMounted) {
+          setBalances(data || {});
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setBalances({});
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGroupId, currentUser]);
+
+  const handleLogin = async (name) => {
+    const session = await login(name);
+    setCurrentUser(session.name);
+    setIsSwitchingUser(false);
+    setError(null);
+    await loadUserGroups();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // Continue client cleanup even if network fails
+    }
+    setCurrentUser(null);
+    setGroups([]);
+    setSelectedGroupId(null);
+    setBalances({});
+    setIsSwitchingUser(false);
+    setError(null);
+  };
+
+  const handleSwitchUser = () => {
+    setIsSwitchingUser(true);
+  };
+
+  const activeGroup = groups.find((g) => g.id === selectedGroupId) || null;
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app-container">
+      <Header
+        currentUser={currentUser}
+        onSwitchUser={currentUser ? handleSwitchUser : undefined}
+        onSignOut={currentUser ? handleLogout : undefined}
+      />
 
-      <div className="ticks"></div>
+      {loading ? (
+        <LoadingSpinner message="Loading application..." />
+      ) : !currentUser ? (
+        <NamePicker onSelectUser={handleLogin} />
+      ) : error ? (
+        <ErrorMessage
+          title="Unable to load groups"
+          message={error}
+          onRetry={loadUserGroups}
+        />
+      ) : (
+        <>
+          <div className="layout">
+            <Sidebar
+              groups={groups}
+              selectedGroupId={selectedGroupId}
+              onSelectGroup={setSelectedGroupId}
+              friends={activeGroup?.members}
+              currentUser={currentUser}
+            />
+            <GroupView
+              group={activeGroup}
+              balances={balances}
+              currentUser={currentUser}
+              onAddExpense={() => setIsAddExpenseOpen(true)}
+            />
+            <RightSidebar
+              members={activeGroup?.members}
+              balances={balances}
+              currentUser={currentUser}
+            />
+          </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+          {isAddExpenseOpen && (
+            <AddExpenseModal
+              isOpen={isAddExpenseOpen}
+              onClose={() => setIsAddExpenseOpen(false)}
+              group={activeGroup}
+              currentUser={currentUser}
+              onExpenseConfirmed={() => {
+                // Refresh group balances on expense save
+                if (selectedGroupId) {
+                  fetchGroupBalances(selectedGroupId)
+                    .then((data) => setBalances(data || {}))
+                    .catch(() => {});
+                }
+              }}
+            />
+          )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+          {isSwitchingUser && (
+            <NamePicker
+              isModal
+              currentUserName={currentUser}
+              onSelectUser={handleLogin}
+              onCancel={() => setIsSwitchingUser(false)}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
 }
-
-export default App

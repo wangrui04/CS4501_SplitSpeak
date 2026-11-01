@@ -14,8 +14,11 @@ from backend.allocation import (
     format_cents,
     resolve_participants,
     allocate_items,
+    allocate_charges,
     split_cents,
     UnknownNameError,
+    MissingChargeMethodError,
+    MissingChargeAmountError,
 )
 
 ROSTER = ["Sarah", "Kayla", "Rui"]
@@ -361,3 +364,256 @@ def test_split_never_creates_or_loses_money(amount, count):
         isinstance(value, int) and value >= 0
         for value in result.values()
     )
+
+
+# Issue #21: Tax and Tip Allocation
+
+def test_fixed_tax_and_tip_equal_allocation():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tax", "amount": "3.00", "percent": None, "method": "equal"},
+        {"kind": "tip", "amount": "6.00", "percent": None, "method": "equal"},
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 3900
+    assert result["shares"] == {
+        "Sarah": 1300,
+        "Kayla": 1300,
+        "Rui": 1300,
+    }
+    assert sum(result["shares"].values()) == 3900
+    assert len(result["charges"]) == 2
+    assert result["charges"][0]["amountCents"] == 300
+    assert result["charges"][1]["amountCents"] == 600
+
+
+def test_fixed_fee_support():
+    base = {
+        "totalCents": 2000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 0},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "fee", "amount": "2.50", "percent": None, "method": "equal"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 2250
+    assert result["shares"] == {
+        "Sarah": 1125,
+        "Kayla": 1125,
+        "Rui": 0,
+    }
+    assert sum(result["shares"].values()) == 2250
+
+
+def test_percentage_tax_and_tip_equal_allocation():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tax", "amount": None, "percent": "10", "method": "equal"},
+        {"kind": "tip", "amount": None, "percent": "20", "method": "equal"},
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 3900
+    assert result["shares"] == {
+        "Sarah": 1300,
+        "Kayla": 1300,
+        "Rui": 1300,
+    }
+    assert sum(result["shares"].values()) == 3900
+
+
+def test_percentage_rounding_half_up():
+    base = {
+        "totalCents": 1750,
+        "shares": {"Sarah": 875, "Kayla": 875, "Rui": 0},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": None, "percent": "15", "method": "equal"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 1750 + 263
+    assert result["shares"] == {
+        "Sarah": 875 + 132,
+        "Kayla": 875 + 131,
+        "Rui": 0,
+    }
+    assert sum(result["shares"].values()) == result["totalCents"]
+
+
+def test_proportional_tax_and_tip_unequal_items():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 0, "Kayla": 2000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": "6.00", "percent": None, "method": "proportional"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 3600
+    assert result["shares"] == {
+        "Sarah": 0,
+        "Kayla": 2400,
+        "Rui": 1200,
+    }
+    assert sum(result["shares"].values()) == 3600
+
+
+def test_proportional_tax_with_percentage():
+    base = {
+        "totalCents": 4200,
+        "shares": {"Sarah": 600, "Kayla": 2100, "Rui": 1500},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tax", "amount": None, "percent": "10", "method": "proportional"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 4620
+    assert result["shares"] == {
+        "Sarah": 660,
+        "Kayla": 2310,
+        "Rui": 1650,
+    }
+    assert sum(result["shares"].values()) == 4620
+
+
+def test_missing_method_raises_error():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": "5.00", "percent": None, "method": None}
+    ]
+    with pytest.raises(MissingChargeMethodError):
+        allocate_charges(charges, base, "Sarah", ROSTER)
+
+
+def test_missing_amount_and_percent_raises_error():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": None, "percent": None, "method": "equal"}
+    ]
+    with pytest.raises(MissingChargeAmountError):
+        allocate_charges(charges, base, "Sarah", ROSTER)
+
+
+def test_both_amount_and_percent_rejected():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": "5.00", "percent": "15", "method": "equal"}
+    ]
+    with pytest.raises(ValueError):
+        allocate_charges(charges, base, "Sarah", ROSTER)
+
+
+def test_deterministic_rounding_leftover_cent_to_payer():
+    base = {
+        "totalCents": 3000,
+        "shares": {"Sarah": 1000, "Kayla": 1000, "Rui": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": "10.00", "percent": None, "method": "equal"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 4000
+    assert result["shares"] == {
+        "Sarah": 1334,
+        "Kayla": 1333,
+        "Rui": 1333,
+    }
+    assert sum(result["shares"].values()) == 4000
+
+
+def test_deterministic_rounding_roster_tie_break_when_payer_absent():
+    members = ["Sarah", "Kayla", "Rui", "Ben"]
+    base = {
+        "totalCents": 2000,
+        "shares": {"Sarah": 0, "Kayla": 0, "Rui": 1000, "Ben": 1000},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "tip", "amount": "1.01", "percent": None, "method": "equal"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", members)
+
+    assert result["totalCents"] == 2101
+    assert result["shares"] == {
+        "Sarah": 0,
+        "Kayla": 0,
+        "Rui": 1051,
+        "Ben": 1050,
+    }
+    assert sum(result["shares"].values()) == 2101
+
+
+def test_charges_when_no_active_meal_participants():
+    base = {
+        "totalCents": 0,
+        "shares": {"Sarah": 0, "Kayla": 0, "Rui": 0},
+        "lineItems": [],
+    }
+    charges = [
+        {"kind": "fee", "amount": "3.00", "percent": None, "method": "equal"}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == 300
+    assert result["shares"] == {
+        "Sarah": 100,
+        "Kayla": 100,
+        "Rui": 100,
+    }
+    assert sum(result["shares"].values()) == 300
+
+
+@given(
+    subtotal=st.integers(min_value=100, max_value=50000),
+    tip_amount=st.integers(min_value=0, max_value=20000),
+    method=st.sampled_from(["equal", "proportional"]),
+)
+def test_hypothesis_charges_sum_to_total(subtotal, tip_amount, method):
+    share1 = subtotal // 2
+    share2 = subtotal - share1
+    base = {
+        "totalCents": subtotal,
+        "shares": {"Sarah": share1, "Kayla": share2, "Rui": 0},
+        "lineItems": [],
+    }
+    dollars = f"{tip_amount / 100:.2f}"
+    charges = [
+        {"kind": "tip", "amount": dollars, "percent": None, "method": method}
+    ]
+    result = allocate_charges(charges, base, "Sarah", ROSTER)
+
+    assert result["totalCents"] == subtotal + tip_amount
+    assert sum(result["shares"].values()) == result["totalCents"]
+    assert all(cents >= 0 for cents in result["shares"].values())
+

@@ -78,24 +78,58 @@ class ExpensePreview(StrictModel):
     validated: bool
 
 
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    group_id: int | None = Field(default=None, alias="groupId")
+    message: str
+    conversation_id: int | None = Field(default=None, alias="conversationId")
+
+
+class ConfirmRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    conversation_id: int | None = Field(default=None, alias="conversationId")
+
+
+class ConfirmResponse(StrictModel):
+    ok: bool
+    expenseId: int
+    conversationId: int
+    status: str
+
+
 class QuestionResponse(StrictModel):
     type: Literal["question"]
     question: str
+    conversationId: int | None = None
+    promptCount: int | None = None
+    status: str | None = None
 
 
 class PreviewResponse(StrictModel):
     type: Literal["preview"]
     preview: ExpensePreview
+    conversationId: int | None = None
+    promptCount: int | None = None
+    status: str | None = None
 
 
 class UnresolvedResponse(StrictModel):
     type: Literal["unresolved"]
     reason: str
+    conversationId: int | None = None
+    promptCount: int | None = None
+    status: str | None = None
+    fallback: str | None = "manual"
 
 
 class ErrorResponse(StrictModel):
     type: Literal["error"]
     message: str
+    conversationId: int | None = None
+    promptCount: int | None = None
+    status: str | None = None
 
 
 ChatResponse = Union[

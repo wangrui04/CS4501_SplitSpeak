@@ -13,5 +13,6 @@ __pycache__/
 node_modules/
 frontend/dist/
 
-# Editor
+# Editor and OS
 .vscode/
+.DS_Store

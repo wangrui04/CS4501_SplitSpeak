@@ -1,13 +1,12 @@
 
-from decimal import Decimal, ROUND_HALF_UP
-
 from backend.schemas import ParsedExpense
 from backend.allocation import (
     allocate_items,
+    allocate_charges,
     resolve_participants,
     UnknownNameError,
-    split_cents,
-    parse_money_to_cents,
+    MissingChargeMethodError,
+    MissingChargeAmountError,
 )
 from backend.validator import validate, question_for_error
 
@@ -100,77 +99,12 @@ def parse_turn(*, llm, conversation, roster, current_user):
             current_user,
         )
 
-        # All tax, tip, and fee arithmetic happens here,
-        # not inside the LLM.
-        for charge in data["charges"]:
-            if charge["method"] is None:
-                return {
-                    "type": "question",
-                    "question": (
-                        "Should tax or tip be split "
-                        "equally or proportionally?"
-                    ),
-                }
-
-            if (
-                charge["amount"] is None
-                and charge["percent"] is None
-            ):
-                return {
-                    "type": "question",
-                    "question": (
-                        f"How much was the {charge['kind']}?"
-                    ),
-                }
-
-            if charge["amount"] is not None:
-                cents = parse_money_to_cents(
-                    charge["amount"]
-                )
-            else:
-                percentage = Decimal(
-                    charge["percent"]
-                )
-
-                cents = int(
-                    (
-                        Decimal(allocation["totalCents"])
-                        * percentage
-                        / 100
-                    ).quantize(
-                        Decimal("1"),
-                        rounding=ROUND_HALF_UP,
-                    )
-                )
-
-            active = [
-                name for name in roster
-                if allocation["shares"][name] > 0
-            ]
-
-            if not active:
-                active = list(roster)
-
-            if charge["method"] == "proportional":
-                weights = [
-                    allocation["shares"][name]
-                    for name in active
-                ]
-            else:
-                weights = [1] * len(active)
-
-            splits = split_cents(
-                cents,
-                weights,
-                active,
-                payer,
-                roster,
-            )
-
-            for name, amount in splits.items():
-                allocation["shares"][name] += amount
-
-            allocation["totalCents"] += cents
+        allocation = allocate_charges(
+            data["charges"],
+            allocation,
+            payer,
+            roster,
+        )
 
         result = validate(
             data,
@@ -178,6 +112,19 @@ def parse_turn(*, llm, conversation, roster, current_user):
             roster,
         )
 
+    except MissingChargeMethodError:
+        return {
+            "type": "question",
+            "question": (
+                "Should tax or tip be split "
+                "equally or proportionally?"
+            ),
+        }
+    except MissingChargeAmountError as exc:
+        return {
+            "type": "question",
+            "question": str(exc),
+        }
     except (ValueError, ZeroDivisionError) as exc:
         return {
             "type": "question",
@@ -198,7 +145,7 @@ def parse_turn(*, llm, conversation, roster, current_user):
         "payer": payer,
         "currency": "USD",
         "lineItems": allocation["lineItems"],
-        "charges": data["charges"],
+        "charges": allocation.get("charges", data["charges"]),
         "totalCents": allocation["totalCents"],
         "shares": [
             {

@@ -167,6 +167,128 @@ def list_expenses(db, group_id):
     return result
 
 
+def get_group_balances(db, group_id):
+    group = get_group(db, group_id)
+    if group is None:
+        return None
+
+    balances = {member: 0 for member in group["members"]}
+    expenses = list_expenses(db, group_id)
+
+    for expense in expenses:
+        payer = expense["payer"]
+        total = expense["totalCents"]
+        if payer in balances:
+            balances[payer] += total
+        for share in expense["shares"]:
+            name = share["name"]
+            if name in balances:
+                balances[name] -= share["cents"]
+
+    return balances
+
+
+def confirm_conversation_expense(db, conversation_id, confirmed_by):
+    conv = get_conversation(db, conversation_id)
+    if conv is None:
+        raise ValueError("Conversation not found")
+
+    if conv["status"] == "confirmed":
+        raise ValueError("Expense has already been confirmed")
+
+    if conv["status"] != "preview":
+        raise ValueError("Draft is not in preview state")
+
+    preview = conv["finalPreview"]
+    if not preview or not isinstance(preview, dict):
+        raise ValueError("Missing or invalid preview draft")
+
+    if not preview.get("validated"):
+        raise ValueError("Draft is not validated")
+
+    group = get_group(db, conv["groupId"])
+    if group is None:
+        raise ValueError("Group not found")
+
+    roster = set(group["members"])
+    if confirmed_by not in roster:
+        raise ValueError("Confirmed by user not in group roster")
+
+    payer = preview.get("payer")
+    if not payer or payer not in roster:
+        raise ValueError("Unknown or missing payer")
+
+    shares = preview.get("shares", [])
+    if not shares:
+        raise ValueError("Shares list is empty")
+
+    total_cents = preview.get("totalCents")
+    if type(total_cents) is not int or total_cents <= 0:
+        raise ValueError("Total must be positive integer cents")
+
+    computed_total = 0
+    clean_shares = []
+    seen_members = set()
+
+    for share in shares:
+        name = share.get("name")
+        cents = share.get("cents")
+        if name not in roster:
+            raise ValueError(f"Unknown member in shares: {name}")
+        if name in seen_members:
+            raise ValueError(f"Duplicate member in shares: {name}")
+        seen_members.add(name)
+
+        if type(cents) is not int or cents < 0:
+            raise ValueError("Shares must be nonnegative integer cents")
+
+        computed_total += cents
+        clean_shares.append({"name": name, "cents": cents})
+
+    if computed_total != total_cents:
+        raise ValueError(
+            f"Shares sum ({computed_total}) does not match total ({total_cents})"
+        )
+
+    description = "Shared expense"
+    if shares and shares[0].get("summary"):
+        description = shares[0]["summary"]
+    elif preview.get("description"):
+        description = preview["description"]
+
+    expense_data = {
+        "groupId": conv["groupId"],
+        "description": description,
+        "payer": payer,
+        "totalCents": total_cents,
+        "shares": clean_shares,
+        "source": "ai",
+        "createdBy": confirmed_by,
+    }
+
+    with db:
+        saved = save_expense(db, expense_data)
+        expense_id = saved["id"]
+
+        update_conversation(
+            db,
+            conversation_id,
+            {"status": "confirmed"},
+        )
+        add_conversation_message(
+            db,
+            conversation_id,
+            "assistant",
+            "Expense confirmed and saved.",
+        )
+
+    return {
+        "expenseId": expense_id,
+        "conversationId": conversation_id,
+        "status": "confirmed",
+    }
+
+
 def create_conversation(db, data):
     with db:
         cursor = db.execute(
@@ -183,7 +305,53 @@ def create_conversation(db, data):
             ),
         )
 
+        conversation_id = cursor.lastrowid
+
+        for message in data.get("messages", []):
+            db.execute(
+                """
+                INSERT INTO conversation_messages
+                (conversation_id, role, content)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    conversation_id,
+                    message["role"],
+                    message["content"],
+                ),
+            )
+
+    return {"id": conversation_id}
+
+
+def add_conversation_message(db, conversation_id, role, content):
+    with db:
+        cursor = db.execute(
+            """
+            INSERT INTO conversation_messages
+            (conversation_id, role, content)
+            VALUES (?, ?, ?)
+            """,
+            (conversation_id, role, content),
+        )
     return {"id": cursor.lastrowid}
+
+
+def get_conversation_messages(db, conversation_id):
+    rows = db.execute(
+        """
+        SELECT role, content
+        FROM conversation_messages
+        WHERE conversation_id=?
+        ORDER BY id ASC
+        """,
+        (conversation_id,),
+    ).fetchall()
+
+    return [
+        {"role": row["role"], "content": row["content"]}
+        for row in rows
+    ]
 
 
 def get_conversation(db, conversation_id):
@@ -196,6 +364,7 @@ def get_conversation(db, conversation_id):
         return None
 
     result = dict(row)
+    messages = get_conversation_messages(db, conversation_id)
 
     return {
         "id": result["id"],
@@ -208,7 +377,36 @@ def get_conversation(db, conversation_id):
             if result["final_preview_json"]
             else None
         ),
+        "messages": messages,
     }
+
+
+def list_conversations(db, group_id):
+    rows = db.execute(
+        """
+        SELECT * FROM conversations
+        WHERE group_id=?
+        ORDER BY id ASC
+        """,
+        (group_id,),
+    ).fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "groupId": row["group_id"],
+            "userName": row["user_name"],
+            "promptCount": row["prompt_count"],
+            "status": row["status"],
+            "finalPreview": (
+                json.loads(row["final_preview_json"])
+                if row["final_preview_json"]
+                else None
+            ),
+            "messages": get_conversation_messages(db, row["id"]),
+        }
+        for row in rows
+    ]
 
 
 def update_conversation(db, conversation_id, data):
@@ -222,6 +420,8 @@ def update_conversation(db, conversation_id, data):
     values = []
 
     for key, value in data.items():
+        if key == "messages":
+            continue
         if key not in mapping:
             raise ValueError("Unknown field")
 
@@ -232,25 +432,45 @@ def update_conversation(db, conversation_id, data):
 
         values.append(value)
 
-    if not fields:
-        return
-
-    values.append(conversation_id)
-
     with db:
-        db.execute(
-            f"""
-            UPDATE conversations
-            SET {", ".join(fields)},
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-            """,
-            values,
-        )
+        if fields:
+            values.append(conversation_id)
+            db.execute(
+                f"""
+                UPDATE conversations
+                SET {", ".join(fields)},
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                values,
+            )
+
+        if "messages" in data:
+            db.execute(
+                "DELETE FROM conversation_messages WHERE conversation_id=?",
+                (conversation_id,),
+            )
+            for message in data["messages"]:
+                db.execute(
+                    """
+                    INSERT INTO conversation_messages
+                    (conversation_id, role, content)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        conversation_id,
+                        message["role"],
+                        message["content"],
+                    ),
+                )
 
 
 def delete_conversation(db, conversation_id):
     with db:
+        db.execute(
+            "DELETE FROM conversation_messages WHERE conversation_id=?",
+            (conversation_id,),
+        )
         db.execute(
             "DELETE FROM conversations WHERE id=?",
             (conversation_id,),
