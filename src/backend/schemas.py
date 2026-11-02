@@ -26,11 +26,26 @@ class Participants(StrictModel):
     names: list[str]
 
 
+class Weight(StrictModel):
+    name: str
+    weight: int = Field(ge=1)
+
+
+class Refund(StrictModel):
+    amount: Money
+    recipient: str
+
+
 class Item(StrictModel):
     name: str
     quantity: int = Field(ge=1)
     unitPrice: Money | None
     participants: Participants
+    # Optional extensions for trips: a different payer per item,
+    # weighted splits (nights, "twice as much"), and refunds.
+    paidBy: str | None = None
+    weights: list[Weight] | None = None
+    refund: Refund | None = None
 
 
 class Charge(StrictModel):

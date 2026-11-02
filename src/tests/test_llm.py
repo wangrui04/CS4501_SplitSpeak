@@ -1,5 +1,6 @@
 
 import copy
+import json
 from unittest.mock import MagicMock
 import pytest
 
@@ -39,19 +40,20 @@ def user_message(content):
 
 
 def tool_response(data):
+    """A structured-output response: one text block holding JSON."""
     block = MagicMock()
-    block.type = "tool_use"
-    block.name = "parse_expense"
-    block.input = data
+    block.type = "text"
+    block.text = json.dumps(data)
 
     response = MagicMock()
+    response.stop_reason = "end_turn"
     response.content = [block]
     return response
 
 
 def make_claude_client(responses):
     sdk = MagicMock()
-    sdk.messages.create.side_effect = responses
+    sdk.beta.messages.create.side_effect = responses
 
     client = ClaudeLlmClient(
         api_key="fake-test-key",
@@ -149,24 +151,7 @@ def test_claude_accepts_valid_structured_output():
     )
 
     assert result == expense()
-    assert sdk.messages.create.call_count == 1
-
-
-def test_claude_rejects_text_only_response():
-    response = MagicMock()
-    block = MagicMock()
-    block.type = "text"
-    block.text = "Everyone owes $10"
-    response.content = [block]
-
-    client, _ = make_claude_client([response])
-
-    with pytest.raises(LlmError):
-        client.parse(
-            messages=[user_message("Split dinner")],
-            roster=ROSTER,
-            current_user="Sarah",
-        )
+    assert sdk.beta.messages.create.call_count == 1
 
 
 def test_invalid_output_retries_once():
@@ -184,7 +169,7 @@ def test_invalid_output_retries_once():
     )
 
     assert result == expense()
-    assert sdk.messages.create.call_count == 2
+    assert sdk.beta.messages.create.call_count == 2
 
 
 def test_invalid_output_stops_after_retry():
@@ -202,10 +187,10 @@ def test_invalid_output_stops_after_retry():
             current_user="Sarah",
         )
 
-    assert sdk.messages.create.call_count == 2
+    assert sdk.beta.messages.create.call_count == 2
 
 
-def test_forced_tool_choice():
+def test_structured_output_request_shape():
     client, sdk = make_claude_client([
         tool_response(expense())
     ])
@@ -216,13 +201,48 @@ def test_forced_tool_choice():
         current_user="Sarah",
     )
 
-    kwargs = sdk.messages.create.call_args.kwargs
+    kwargs = sdk.beta.messages.create.call_args.kwargs
 
     assert kwargs["model"] == "claude-sonnet-5-5"
-    assert kwargs["tool_choice"] == {
-        "type": "tool",
-        "name": "parse_expense",
-    }
+    assert kwargs["output_config"]["format"]["type"] == "json_schema"
+    # Sonnet 5.5 returns 400 for forced tool_choice and temperature.
+    assert "tool_choice" not in kwargs
+    assert "temperature" not in kwargs
+
+
+def test_text_response_that_is_not_json_is_rejected():
+    response = MagicMock()
+    response.stop_reason = "end_turn"
+    block = MagicMock()
+    block.type = "text"
+    block.text = "Everyone owes $10"
+    response.content = [block]
+
+    client, _ = make_claude_client([response, response])
+
+    with pytest.raises(LlmError, match="LLM_INVALID_OUTPUT"):
+        client.parse(
+            messages=[user_message("Split dinner")],
+            roster=ROSTER,
+            current_user="Sarah",
+        )
+
+
+def test_refusal_is_not_retried():
+    response = MagicMock()
+    response.stop_reason = "refusal"
+    response.content = []
+
+    client, sdk = make_claude_client([response])
+
+    with pytest.raises(LlmError, match="LLM_REFUSED"):
+        client.parse(
+            messages=[user_message("Split dinner")],
+            roster=ROSTER,
+            current_user="Sarah",
+        )
+
+    assert sdk.beta.messages.create.call_count == 1
 
 
 def test_api_key_not_logged(caplog):
@@ -253,7 +273,7 @@ def test_network_error_retries_once():
     )
 
     assert result == expense()
-    assert sdk.messages.create.call_count == 2
+    assert sdk.beta.messages.create.call_count == 2
 
 
 # Issue #12: Natural-language parsing pipeline

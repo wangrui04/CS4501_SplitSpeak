@@ -1,8 +1,22 @@
 
 from __future__ import annotations
 
+import json
+
+from anthropic import transform_schema
 from pydantic import ValidationError
+
+from backend.config import (
+    DEFAULT_LLM_MODEL,
+    LLM_FALLBACK_BETA,
+    LLM_MAX_ATTEMPTS,
+    LLM_MAX_TOKENS,
+    LLM_TIMEOUT_SECONDS,
+    SYSTEM_PROMPT,
+)
 from backend.schemas import ParsedExpense
+
+PARSED_EXPENSE_SCHEMA = transform_schema(ParsedExpense)
 
 
 class LlmError(Exception):
@@ -274,7 +288,7 @@ class ClaudeLlmClient:
     def __init__(
         self,
         api_key,
-        model="claude-sonnet-5-5",
+        model=DEFAULT_LLM_MODEL,
         sdk=None,
     ):
         if not api_key:
@@ -289,7 +303,7 @@ class ClaudeLlmClient:
 
             sdk = Anthropic(
                 api_key=api_key,
-                timeout=20.0,
+                timeout=LLM_TIMEOUT_SECONDS,
                 max_retries=0,
             )
 
@@ -297,84 +311,73 @@ class ClaudeLlmClient:
 
     def parse(self, *, messages, roster, current_user):
         system_prompt = (
-            "Extract structured expense data. "
-            "Never calculate shares or totals. "
-            "Never invent amounts, payer, tax, or tip. "
-            "Represent I/me as ME. "
-            "Use all_except for everyone except a member. "
-            "Ask about unknown details using openQuestions. "
-            "Correct obvious typos in descriptions and item names (e.g. 'dinr' -> 'Dinner', 'drnks' -> 'Drinks', 'nachoes' -> 'Nachos'). "
-            "Correct member name typos only when unambiguous (e.g. 'Riu' -> 'Rui'). "
-            "Never guess ambiguous participant names; ask using openQuestions. "
-            "When instructions are unclear or refer to an unspecified residual (e.g. 'split the rest' without an additional total), ask for clarification via openQuestions. "
-            f"Group roster: {roster}. "
-            f"Signed-in user: {current_user}."
+            SYSTEM_PROMPT
+            + f"\nGroup roster: {roster}."
+            + f"\nSigned-in user (ME): {current_user}."
         )
 
         last_error = None
 
-        for attempt in range(2):
+        for attempt in range(LLM_MAX_ATTEMPTS):
             try:
-                request_messages = [
-                    dict(message)
-                    for message in messages
-                ]
+                request_messages = delimit_user_messages(messages)
 
                 if attempt and last_error is not None:
                     request_messages.append({
                         "role": "user",
                         "content": (
-                            "Previous tool response invalid: "
+                            "Previous response invalid: "
                             f"{last_error}. "
-                            "Return a corrected structured tool call."
+                            "Return corrected JSON."
                         ),
                     })
 
-                response = self.sdk.messages.create(
+                # Sonnet 5.5 rejects forced tool_choice and sampling
+                # params, so JSON comes from output_config.format.
+                response = self.sdk.beta.messages.create(
                     model=self.model,
-                    max_tokens=2048,
-                    temperature=0,
+                    max_tokens=LLM_MAX_TOKENS,
                     system=system_prompt,
                     messages=request_messages,
-                    tools=[{
-                        "name": "parse_expense",
-                        "description": (
-                            "Extract expense details only"
-                        ),
-                        "input_schema": (
-                            ParsedExpense.model_json_schema()
-                        ),
-                    }],
-                    tool_choice={
-                        "type": "tool",
-                        "name": "parse_expense",
+                    output_config={
+                        "format": {
+                            "type": "json_schema",
+                            "schema": PARSED_EXPENSE_SCHEMA,
+                        },
                     },
+                    betas=[LLM_FALLBACK_BETA],
+                    fallbacks="default",
                 )
 
-                blocks = [
-                    block
+                if getattr(response, "stop_reason", None) == "refusal":
+                    raise LlmError("LLM_REFUSED")
+
+                texts = [
+                    block.text
                     for block in response.content
-                    if (
-                        getattr(block, "type", None)
-                        == "tool_use"
-                        and getattr(block, "name", None)
-                        == "parse_expense"
-                    )
+                    if getattr(block, "type", None) == "text"
                 ]
 
-                if not blocks:
+                if not texts:
                     raise LlmError(
                         "LLM_INVALID_OUTPUT: "
-                        "missing structured tool call"
+                        "missing structured JSON"
                     )
 
-                parsed = ParsedExpense.model_validate(
-                    blocks[0].input
-                )
+                try:
+                    data = json.loads(texts[0])
+                except (TypeError, ValueError):
+                    raise LlmError(
+                        "LLM_INVALID_OUTPUT: response was not JSON"
+                    ) from None
 
-                return parsed.model_dump()
+                parsed = ParsedExpense.model_validate(data)
+
+                return parsed.model_dump(exclude_defaults=True)
 
             except (ValidationError, LlmError) as exc:
+                if str(exc) == "LLM_REFUSED":
+                    raise
                 last_error = str(exc)
 
             except (ConnectionError, TimeoutError):
@@ -388,6 +391,7 @@ class ClaudeLlmClient:
                 ):
                     last_error = "Temporary network failure"
                 else:
+                    # Never echo SDK errors: they can include headers.
                     raise LlmError(
                         "LLM_REQUEST_FAILED"
                     ) from None
@@ -395,3 +399,22 @@ class ClaudeLlmClient:
         raise LlmError(
             "LLM_INVALID_OUTPUT: " + str(last_error)
         )
+
+
+def delimit_user_messages(messages):
+    """Wrap user text in tags so the model treats it as data."""
+    delimited = []
+
+    for message in messages:
+        content = message["content"]
+
+        if message["role"] == "user":
+            content = (
+                "<user_message>\n"
+                + content.replace("</user_message>", "")
+                + "\n</user_message>"
+            )
+
+        delimited.append({"role": message["role"], "content": content})
+
+    return delimited
