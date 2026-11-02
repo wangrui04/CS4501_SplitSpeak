@@ -671,6 +671,33 @@ def create_app(
     return app
 
 
+def select_llm(env):
+    """Pick the LLM client from LLM_PROVIDER.
+
+    - unset: Claude when ANTHROPIC_API_KEY is set (built per request),
+      otherwise the built-in demo assistant.
+    - "fake": TEST-ONLY fixture client. Never the default.
+    - "demo": the built-in demo assistant.
+    - "claude": Claude; fails at request time without a key.
+    """
+    provider = (env.get("LLM_PROVIDER") or "").strip().lower()
+
+    if provider == "fake":
+        from backend.llm import FixtureLlmClient
+
+        return FixtureLlmClient()
+
+    if provider == "claude":
+        return None
+
+    if provider == "demo" or not env.get("ANTHROPIC_API_KEY"):
+        from backend.llm import DemoLlmClient
+
+        return DemoLlmClient()
+
+    return None
+
+
 def get_app():
     from backend.database import create_database, seed_database
 
@@ -681,11 +708,7 @@ def get_app():
         "SESSION_SECRET",
         "development-session-secret-key-at-least-32-chars",
     )
-    llm = None
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        from backend.llm import DemoLlmClient
-
-        llm = DemoLlmClient()
+    llm = select_llm(os.environ)
 
     web_origins = [
         origin.strip()

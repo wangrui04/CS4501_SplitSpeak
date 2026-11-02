@@ -1,0 +1,44 @@
+{
+  "id": "B1",
+  "label": "Basic",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "sarah rui and kayla got dinner and it was 96 total w tax and tip. i paid the whole thing im sarah. split evenly pls",
+      "send": "always"
+    }
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 3200,
+      "Kayla": 3200,
+      "Rui": 3200
+    },
+    "paid": {
+      "Sarah": 9600,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 3200
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 3200
+      }
+    ],
+    "expectedPrompts": 1
+  },
+  "informational": false,
+  "behavior": {
+    "mustNotAsk": true
+  },
+  "categories": [
+    "amounts"
+  ]
+}

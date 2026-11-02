@@ -1,0 +1,55 @@
+{
+  "id": "B5",
+  "label": "Most complex",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "im sarah. trip w rui and kayla. i paid 600 lodging. me and rui stayed 3 nights kayla stayed 2. split lodging per person per night. rui paid dinner 120 split equal between all 3. kayla paid 60 taxi everyone except rui split equal. all amounts final no extra tax or fees",
+      "send": "always"
+    },
+    {
+      "text": "wait kayla didnt eat dinner actually. rui said shed cover twice as much dinner as me. also i got a 100 refund on the lodging",
+      "send": "always"
+    },
+    {
+      "text": "yes same proportions and the refund went back to me",
+      "send": "if_asked"
+    }
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 25750,
+      "Kayla": 15500,
+      "Rui": 26750
+    },
+    "paid": {
+      "Sarah": 50000,
+      "Kayla": 6000,
+      "Rui": 12000
+    },
+    "settlement": [
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 14750
+      },
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 9500
+      }
+    ],
+    "expectedPrompts": 3
+  },
+  "informational": false,
+  "behavior": {
+    "mustAskBeforeFinalPreview": true
+  },
+  "categories": [
+    "correction",
+    "weights/nights",
+    "refund",
+    "multiple payers"
+  ]
+}

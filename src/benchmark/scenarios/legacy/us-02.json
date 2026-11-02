@@ -1,0 +1,44 @@
+{
+  "id": "US-02",
+  "label": "Selected members",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I paid $24 for groceries, but only Kayla and Rui are sharing them.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustNotAsk": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 0,
+      "Kayla": 1200,
+      "Rui": 1200
+    },
+    "paid": {
+      "Sarah": 2400,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 1200
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1200
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}

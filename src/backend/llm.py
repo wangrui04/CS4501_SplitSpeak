@@ -1,7 +1,9 @@
 
 from __future__ import annotations
 
+import copy
 import json
+from pathlib import Path
 
 from anthropic import transform_schema
 from pydantic import ValidationError
@@ -39,6 +41,34 @@ class FakeLlmClient:
             raise LlmError("Scripted LLM exhausted")
 
         return self.scripted.pop(0)
+
+
+FIXTURES_PATH = Path(__file__).parent / "fixtures" / "llm_fixtures.json"
+
+
+class FixtureLlmClient:
+    """TEST-ONLY: returns scripted outputs keyed by the last user message.
+
+    Enabled only with LLM_PROVIDER=fake, for E2E tests and offline
+    benchmark smoke runs. It never calls a paid API.
+    """
+
+    def __init__(self, path=FIXTURES_PATH):
+        self.responses = json.loads(Path(path).read_text())["responses"]
+        self.calls = []
+
+    def parse(self, *, messages, roster, current_user):
+        last = next(
+            message["content"]
+            for message in reversed(messages)
+            if message["role"] == "user"
+        )
+        self.calls.append({"message": last, "current_user": current_user})
+
+        if last not in self.responses:
+            raise LlmError("No fixture for this message")
+
+        return copy.deepcopy(self.responses[last])
 
 
 class DemoLlmClient:

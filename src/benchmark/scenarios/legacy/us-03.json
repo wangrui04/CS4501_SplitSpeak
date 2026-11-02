@@ -1,0 +1,44 @@
+{
+  "id": "US-03",
+  "label": "Itemized",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I paid $42. Kayla and I shared $12 nachos. Rui had a $15 burger, and Kayla had a $15 pasta.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustNotAsk": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 600,
+      "Kayla": 2100,
+      "Rui": 1500
+    },
+    "paid": {
+      "Sarah": 4200,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 2100
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1500
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}
