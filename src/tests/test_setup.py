@@ -28,7 +28,7 @@ def read_file(path):
 def test_backend_and_frontend_exist():
     assert (SRC / "backend").is_dir()
     assert (SRC / "tests").is_dir()
-    assert (ROOT / "frontend").is_dir()
+    assert (SRC / "frontend").is_dir()
 
 
 def test_required_python_dependencies():
@@ -50,7 +50,7 @@ def test_required_python_dependencies():
 
 def test_react_project():
     package = json.loads(
-        read_file("frontend/package.json")
+        read_file("src/frontend/package.json")
     )
 
     assert "react" in package.get("dependencies", {})

@@ -40,7 +40,7 @@ Suggested order: start #1–#4 and #14–#16 in parallel on day 1; #5–#9 on da
 Set up the repo so everyone can run the frontend and backend locally with one command each.
 
 ## Required features
-- `frontend/`: React app (Vite) with a placeholder home page.
+- `src/frontend/`: React app (Vite) with a placeholder home page.
 - `backend/`: Python API (FastAPI) with a `GET /health` endpoint.
 - Frontend can call the backend (CORS or dev proxy configured).
 - `.env.example` with the LLM API key variable; `.env` in `.gitignore`.

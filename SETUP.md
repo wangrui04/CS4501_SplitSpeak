@@ -151,7 +151,7 @@ The automated tests use mock AI responses, so an Anthropic API key is not requir
 From the repository root:
 
 ```bash
-cd frontend
+cd src/frontend
 npm install
 ```
 
@@ -253,10 +253,11 @@ CS4501_Splitwise/
 │   ├── AlphaTesting.md
 │   ├── UserStories.md
 │   └── alpha-validation-decision.md
-├── frontend/
-│   ├── package.json
-│   └── src/
 ├── src/
+│   ├── benchmark_local.db
+│   ├── frontend/
+│   │   ├── package.json
+│   │   └── src/
 │   ├── backend/
 │   │   ├── __init__.py
 │   │   ├── allocation.py

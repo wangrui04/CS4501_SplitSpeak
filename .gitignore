@@ -11,7 +11,7 @@ __pycache__/
 
 # React
 node_modules/
-frontend/dist/
+src/frontend/dist/
 
 # Editor and OS
 .vscode/

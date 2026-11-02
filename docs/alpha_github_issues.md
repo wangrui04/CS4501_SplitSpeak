@@ -76,7 +76,8 @@ CS4501_Splitwise/
 │   ├── llm.py
 │   └── pipeline.py
 │
-├── frontend/
+├── src/
+│   └── frontend/
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js

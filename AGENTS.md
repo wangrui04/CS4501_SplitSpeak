@@ -57,7 +57,7 @@ If you introduce a framework, library, or service not listed here, say so explic
 Suggested layout once code exists:
 
 ```text
-frontend/   React app
+src/frontend/   React app
 backend/    Python API, models, split calculation, LLM + validation pipeline
 docs/       Design notes, API contracts
 ideas/      Original startup pitches (do not modify)

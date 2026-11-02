@@ -113,11 +113,11 @@ PYTHONPATH=src .venv/bin/python -m uvicorn backend.main:get_app --factory --port
 In a second terminal:
 
 ```bash
-cd frontend
+cd src/frontend
 npm run dev
 ```
 
-*(Or from the repository root: `npm --prefix frontend run dev`)*.
+*(Or from the repository root: `npm --prefix src/frontend run dev`)*.
 
 - The Vite dev server starts at `http://localhost:5173`.
 - API calls to `/api/*` are automatically proxied to `http://127.0.0.1:8000`.
@@ -150,12 +150,8 @@ CS4501_Splitwise/
 │   ├── UserStories.md
 │   └── alpha-validation-decision.md
 │
-├── frontend/
-│   ├── package.json
-│   ├── index.html
-│   └── src/
-│
 ├── src/
+│   ├── benchmark_local.db
 │   ├── backend/
 │   │   ├── __init__.py
 │   │   ├── main.py
@@ -166,6 +162,11 @@ CS4501_Splitwise/
 │   │   ├── repository.py
 │   │   ├── llm.py
 │   │   └── pipeline.py
+│   │
+│   ├── frontend/
+│   │   ├── package.json
+│   │   ├── index.html
+│   │   └── src/
 │   │
 │   ├── demo/
 │   │   └── splitwise_ai_demo.html
@@ -190,7 +191,7 @@ CS4501_Splitwise/
 
 The original HTML prototype is preserved in `src/demo/` as a reference for frontend development.
 
-The React interface is being developed separately in `frontend/`.
+The React interface is being developed separately in `src/frontend/`.
 
 ---
 
