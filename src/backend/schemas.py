@@ -83,13 +83,35 @@ class Share(StrictModel):
     summary: str
 
 
+class Paid(StrictModel):
+    name: str
+    # Negative when a refund received exceeds what the person paid.
+    cents: int
+
+
+class Transfer(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: str = Field(alias="from")
+    to: str
+    cents: int = Field(gt=0)
+
+
+class Settlement(StrictModel):
+    nets: list[dict]
+    transfers: list[Transfer]
+
+
 class ExpensePreview(StrictModel):
+    description: str | None = None
     payer: str
     currency: Literal["USD"]
     lineItems: list[dict]
     charges: list[dict]
     totalCents: int = Field(ge=0)
     shares: list[Share]
+    paid: list[Paid] = []
+    settlement: Settlement | None = None
     validated: bool
 
 

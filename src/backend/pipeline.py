@@ -7,7 +7,9 @@ from backend.allocation import (
     UnknownNameError,
     MissingChargeMethodError,
     MissingChargeAmountError,
+    WeightsMismatchError,
 )
+from backend.settlement import compute_settlement
 from backend.validator import validate, question_for_error
 
 
@@ -112,6 +114,22 @@ def parse_turn(*, llm, conversation, roster, current_user):
             roster,
         )
 
+    except UnknownNameError as error:
+        return {
+            "type": "question",
+            "question": (
+                f"Unknown member {error.name}. "
+                "Who did you mean?"
+            ),
+        }
+    except WeightsMismatchError as error:
+        return {
+            "type": "question",
+            "question": (
+                f"How should {error.item_name} be weighted "
+                "between the people who shared it?"
+            ),
+        }
     except MissingChargeMethodError:
         return {
             "type": "question",
@@ -141,20 +159,46 @@ def parse_turn(*, llm, conversation, roster, current_user):
             ),
         }
 
+    shares = [
+        {
+            "name": name,
+            "cents": allocation["shares"][name],
+            "summary": data["description"],
+        }
+        for name in roster
+    ]
+    paid = [
+        {"name": name, "cents": allocation["paid"].get(name, 0)}
+        for name in roster
+    ]
+
+    # Same function the group page uses, so testers, the benchmark,
+    # and saved balances all read the same numbers.
+    settlement = compute_settlement(
+        [{"payments": paid, "shares": shares}],
+        roster,
+    )
+
+    if settlement["error"]:
+        return {
+            "type": "question",
+            "question": "Please clarify this expense: amounts paid "
+            "do not match the shares.",
+        }
+
     preview = {
+        "description": data["description"],
         "payer": payer,
         "currency": "USD",
         "lineItems": allocation["lineItems"],
         "charges": allocation.get("charges", data["charges"]),
         "totalCents": allocation["totalCents"],
-        "shares": [
-            {
-                "name": name,
-                "cents": allocation["shares"][name],
-                "summary": data["description"],
-            }
-            for name in roster
-        ],
+        "shares": shares,
+        "paid": paid,
+        "settlement": {
+            "nets": settlement["nets"],
+            "transfers": settlement["transfers"],
+        },
         "validated": True,
     }
 

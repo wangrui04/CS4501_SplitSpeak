@@ -16,16 +16,17 @@ from backend.repository import (
     list_conversations,
     confirm_conversation_expense,
     get_group_balances,
+    list_expenses,
 )
+from backend.config import MAX_PROMPTS_PER_CONVERSATION
 from backend.pipeline import parse_turn
+from backend.settlement import compute_settlement, member_balances
 from backend.schemas import (
     ChatRequest,
     ChatResponse,
     ConfirmRequest,
     ConfirmResponse,
 )
-
-MAX_PROMPTS_PER_CONVERSATION = 5
 
 
 class Login(BaseModel):
@@ -164,17 +165,46 @@ def create_app(db, session_secret, llm=None):
             for group in list_groups(db)
         ]
 
-    @app.get("/api/groups/{group_id}")
-    def group(group_id: int):
-        result = get_group(db, group_id)
-
-        if result is None:
+    def member_group_or_error(group_id, request):
+        group_data = get_group(db, group_id)
+        if group_data is None:
             raise HTTPException(
                 status_code=404,
                 detail="Group not found",
             )
+        if request.session.get("name") not in group_data["members"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Not a member of this group",
+            )
+        return group_data
 
-        return result
+    @app.get("/api/groups/{group_id}")
+    def group(group_id: int, request: Request):
+        result = member_group_or_error(group_id, request)
+        settlement = compute_settlement(
+            list_expenses(db, group_id),
+            result["members"],
+        )
+        relative = member_balances(
+            settlement,
+            request.session.get("name"),
+            result["members"],
+        )
+
+        return {
+            **result,
+            "nets": settlement["nets"],
+            "transfers": settlement["transfers"],
+            "balances": relative["balances"],
+            "summary": relative["summary"],
+        }
+
+    @app.get("/api/groups/{group_id}/expenses")
+    def group_expenses(group_id: int, request: Request):
+        member_group_or_error(group_id, request)
+        # Newest first, as on the group page.
+        return list(reversed(list_expenses(db, group_id)))
 
     def get_llm():
         active_llm = getattr(app.state, "llm", None)

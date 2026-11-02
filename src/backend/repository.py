@@ -1,6 +1,8 @@
 
 import json
 
+from backend.settlement import compute_nets
+
 
 def list_groups(db):
     rows = db.execute(
@@ -81,6 +83,20 @@ def save_expense(db, data):
     if data["source"] not in ("ai", "manual"):
         raise ValueError("Invalid source")
 
+    payments = data.get("payments") or [
+        {"name": data["payer"], "cents": total}
+    ]
+
+    if (
+        any(type(payment["cents"]) is not int for payment in payments)
+        or any(payment["name"] not in members for payment in payments)
+        or len({payment["name"] for payment in payments}) != len(payments)
+    ):
+        raise ValueError("Invalid payments")
+
+    if sum(payment["cents"] for payment in payments) != total:
+        raise ValueError("Payments do not sum to total")
+
     with db:
         cursor = db.execute(
             """
@@ -117,6 +133,20 @@ def save_expense(db, data):
                     expense_id,
                     share["name"],
                     share["cents"],
+                ),
+            )
+
+        for payment in payments:
+            db.execute(
+                """
+                INSERT INTO expense_payments
+                (expense_id, name, cents)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    expense_id,
+                    payment["name"],
+                    payment["cents"],
                 ),
             )
 
@@ -162,6 +192,23 @@ def list_expenses(db, group_id):
             for share in share_rows
         ]
 
+        payment_rows = db.execute(
+            """
+            SELECT p.name, p.cents
+            FROM expense_payments p
+            LEFT JOIN group_members m
+                ON m.group_id=? AND m.name=p.name
+            WHERE p.expense_id=?
+            ORDER BY m.position, p.rowid
+            """,
+            (group_id, expense["id"]),
+        )
+
+        expense["payments"] = [
+            {"name": row["name"], "cents": row["cents"]}
+            for row in payment_rows
+        ] or [{"name": expense["payer"], "cents": expense["totalCents"]}]
+
         result.append(expense)
 
     return result
@@ -172,20 +219,12 @@ def get_group_balances(db, group_id):
     if group is None:
         return None
 
-    balances = {member: 0 for member in group["members"]}
-    expenses = list_expenses(db, group_id)
+    nets = compute_nets(list_expenses(db, group_id), group["members"])
 
-    for expense in expenses:
-        payer = expense["payer"]
-        total = expense["totalCents"]
-        if payer in balances:
-            balances[payer] += total
-        for share in expense["shares"]:
-            name = share["name"]
-            if name in balances:
-                balances[name] -= share["cents"]
-
-    return balances
+    return {
+        member: nets.get(member, 0)
+        for member in group["members"]
+    }
 
 
 def confirm_conversation_expense(db, conversation_id, confirmed_by):
@@ -250,11 +289,13 @@ def confirm_conversation_expense(db, conversation_id, confirmed_by):
             f"Shares sum ({computed_total}) does not match total ({total_cents})"
         )
 
+    payments = _clean_payments(preview, payer, total_cents, roster)
+
     description = "Shared expense"
-    if shares and shares[0].get("summary"):
-        description = shares[0]["summary"]
-    elif preview.get("description"):
+    if preview.get("description"):
         description = preview["description"]
+    elif shares and shares[0].get("summary"):
+        description = shares[0]["summary"]
 
     expense_data = {
         "groupId": conv["groupId"],
@@ -262,6 +303,7 @@ def confirm_conversation_expense(db, conversation_id, confirmed_by):
         "payer": payer,
         "totalCents": total_cents,
         "shares": clean_shares,
+        "payments": payments,
         "source": "ai",
         "createdBy": confirmed_by,
     }
@@ -287,6 +329,27 @@ def confirm_conversation_expense(db, conversation_id, confirmed_by):
         "conversationId": conversation_id,
         "status": "confirmed",
     }
+
+
+def _clean_payments(preview, payer, total_cents, roster):
+    """Re-check the stored preview's amounts paid before saving."""
+    paid = preview.get("paid")
+    if not paid:
+        return [{"name": payer, "cents": total_cents}]
+
+    payments = []
+    for entry in paid:
+        name = entry.get("name")
+        cents = entry.get("cents")
+        if name not in roster or type(cents) is not int:
+            raise ValueError("Invalid amounts paid in preview")
+        if cents:
+            payments.append({"name": name, "cents": cents})
+
+    if sum(payment["cents"] for payment in payments) != total_cents:
+        raise ValueError("Amounts paid do not match total")
+
+    return payments
 
 
 def create_conversation(db, data):

@@ -41,6 +41,15 @@ def create_database(path=":memory:"):
             PRIMARY KEY(expense_id, name)
         );
 
+        -- Net amount each person paid toward an expense. A refund the
+        -- person received is subtracted, so a value can be negative.
+        CREATE TABLE IF NOT EXISTS expense_payments (
+            expense_id INTEGER NOT NULL REFERENCES expenses(id),
+            name TEXT NOT NULL,
+            cents INTEGER NOT NULL,
+            PRIMARY KEY(expense_id, name)
+        );
+
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY,
             group_id INTEGER NOT NULL REFERENCES groups(id),
