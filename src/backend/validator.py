@@ -59,6 +59,22 @@ def validate(
             "Shares do not sum to total",
         ))
 
+    paid = allocation.get("paid")
+
+    if paid is not None and type(total) is int:
+        if any(type(value) is not int for value in paid.values()):
+            errors.append(_error(
+                "NON_INTEGER_CENTS",
+                "paid",
+                "Amounts paid must be integer cents",
+            ))
+        elif sum(paid.values()) != total:
+            errors.append(_error(
+                "PAYMENTS_DONT_SUM",
+                "paid",
+                "Amounts paid do not sum to total",
+            ))
+
     payer = parsed.get("payer")
 
     if payer is None:
@@ -81,6 +97,7 @@ def validate(
             ))
 
     item_total = 0
+    item_net_total = 0
     missing_price = False
 
     for index, item in enumerate(parsed.get("items", [])):
@@ -95,8 +112,19 @@ def validate(
             missing_price = True
         else:
             try:
-                cents = parse_money_to_cents(price)
-                item_total += cents * item.get("quantity", 1)
+                gross = parse_money_to_cents(price) * item.get("quantity", 1)
+                item_total += gross
+                item_net_total += gross
+                refund = item.get("refund")
+                if refund:
+                    refund_cents = parse_money_to_cents(refund["amount"])
+                    item_net_total -= refund_cents
+                    if refund_cents > gross:
+                        errors.append(_error(
+                            "INVALID_REFUND",
+                            f"items[{index}].refund",
+                            f"Refund is larger than {item.get('name', 'item')}",
+                        ))
             except (ValueError, TypeError):
                 errors.append(_error(
                     "NEGATIVE_AMOUNT",
@@ -113,6 +141,22 @@ def validate(
                 errors.append(_error(
                     "UNKNOWN_NAME",
                     f"items[{index}].participants",
+                    f"Unknown member {name}",
+                ))
+
+        extra_names = []
+        if item.get("paidBy"):
+            extra_names.append(("paidBy", item["paidBy"]))
+        for entry in item.get("weights") or []:
+            extra_names.append(("weights", entry.get("name")))
+        if item.get("refund"):
+            extra_names.append(("refund", item["refund"].get("recipient")))
+
+        for field, name in extra_names:
+            if name != "ME" and name not in roster:
+                errors.append(_error(
+                    "UNKNOWN_NAME",
+                    f"items[{index}].{field}",
                     f"Unknown member {name}",
                 ))
 
@@ -144,7 +188,10 @@ def validate(
         try:
             stated_cents = parse_money_to_cents(stated)
 
-            if not parsed.get("charges") and stated_cents != item_total:
+            if (
+                not parsed.get("charges")
+                and stated_cents not in (item_total, item_net_total)
+            ):
                 errors.append(_error(
                     "STATED_TOTAL_MISMATCH",
                     "statedTotal",

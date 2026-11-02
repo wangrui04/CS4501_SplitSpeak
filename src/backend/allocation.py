@@ -22,6 +22,14 @@ class MissingChargeAmountError(ValueError):
         super().__init__(message)
 
 
+class WeightsMismatchError(ValueError):
+    def __init__(self, item_name):
+        self.item_name = item_name
+        super().__init__(
+            f"Weights for {item_name} must list exactly its participants"
+        )
+
+
 _MONEY = re.compile(
     r"^\$?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$"
 )
@@ -44,6 +52,19 @@ def format_cents(cents: int) -> str:
     remainder = abs(cents) % 100
 
     return f"{sign}${dollars:,}.{remainder:02d}"
+
+
+def resolve_name(
+    name: str,
+    roster: list[str],
+    current_user: str,
+) -> str:
+    resolved = current_user if name == "ME" else name
+
+    if resolved not in roster:
+        raise UnknownNameError(resolved)
+
+    return resolved
 
 
 def resolve_participants(
@@ -143,6 +164,26 @@ def split_cents(
     return base
 
 
+def _item_weights(
+    item: dict,
+    sharers: list[str],
+    roster: list[str],
+    current_user: str,
+) -> list[int]:
+    if not item.get("weights"):
+        return [1] * len(sharers)
+
+    by_name = {}
+    for entry in item["weights"]:
+        name = resolve_name(entry["name"], roster, current_user)
+        by_name[name] = entry["weight"]
+
+    if set(by_name) != set(sharers):
+        raise WeightsMismatchError(item["name"])
+
+    return [by_name[name] for name in sharers]
+
+
 def allocate_items(
     items: list,
     payer: str,
@@ -150,6 +191,7 @@ def allocate_items(
     current_user: str,
 ) -> dict:
     shares = {name: 0 for name in roster}
+    paid = {name: 0 for name in roster}
     total = 0
     line_items = []
 
@@ -168,9 +210,26 @@ def allocate_items(
         if type(count) is not int or count < 1:
             raise ValueError("Invalid quantity")
 
-        cents = parse_money_to_cents(
+        gross = parse_money_to_cents(
             item["unitPrice"]
         ) * count
+
+        refund = item.get("refund")
+        refund_cents = 0
+        if refund:
+            refund_cents = parse_money_to_cents(refund["amount"])
+            if refund_cents > gross:
+                raise ValueError(
+                    f"Refund is larger than {item['name']}"
+                )
+
+        cents = gross - refund_cents
+
+        item_payer = (
+            resolve_name(item["paidBy"], roster, current_user)
+            if item.get("paidBy")
+            else payer
+        )
 
         sharers = resolve_participants(
             item["participants"],
@@ -183,18 +242,29 @@ def allocate_items(
 
         allocation = split_cents(
             cents,
-            [1] * len(sharers),
+            _item_weights(item, sharers, roster, current_user),
             sharers,
-            payer,
+            item_payer,
             roster,
         )
 
         for name, amount in allocation.items():
             shares[name] += amount
 
+        # Paying is recorded gross; a refund counts as negative paid.
+        paid[item_payer] += gross
+        if refund:
+            recipient = resolve_name(
+                refund["recipient"], roster, current_user
+            )
+            paid[recipient] -= refund_cents
+
         line_items.append({
             "name": item["name"],
             "totalCents": cents,
+            "grossCents": gross,
+            "refundCents": refund_cents,
+            "paidBy": item_payer,
             "shares": allocation,
         })
 
@@ -203,8 +273,35 @@ def allocate_items(
     return {
         "totalCents": total,
         "shares": shares,
+        "paid": paid,
         "lineItems": line_items,
     }
+
+
+def _charge_cents(charge: dict, subtotal_cents: int) -> int:
+    method = charge.get("method")
+    if not method or method not in ("equal", "proportional"):
+        raise MissingChargeMethodError("Should tax or tip be split equally or proportionally?")
+
+    amount = charge.get("amount")
+    percent = charge.get("percent")
+
+    if amount is not None and percent is not None:
+        raise ValueError("Charge cannot specify both amount and percent")
+
+    if amount is None and percent is None:
+        raise MissingChargeAmountError(f"How much was the {charge.get('kind', 'charge')}?")
+
+    if amount is not None:
+        return parse_money_to_cents(amount)
+
+    percentage = Decimal(str(percent))
+    return int(
+        (Decimal(subtotal_cents) * percentage / 100).quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP,
+        )
+    )
 
 
 def allocate_charges(
@@ -213,48 +310,46 @@ def allocate_charges(
     payer: str,
     roster: list[str],
 ) -> dict:
+    """Add tax, tip, and fees on top of item shares.
+
+    Charges with the same method are pooled and allocated once, so
+    tax + tip split proportionally round like a single charge. Rounding
+    them separately can move a cent between people.
+    """
     subtotal_cents = allocation.get("totalCents", 0)
     current_shares = dict(allocation.get("shares", {name: 0 for name in roster}))
     base_item_shares = dict(allocation.get("shares", {name: 0 for name in roster}))
+    paid = dict(allocation.get("paid", {name: 0 for name in roster}))
     line_items = list(allocation.get("lineItems", []))
     allocated_charges = []
-    total_cents = subtotal_cents
+    pools = {}
 
     for raw in charges:
         charge = raw.model_dump() if hasattr(raw, "model_dump") else dict(raw)
+        charge_cents = _charge_cents(charge, subtotal_cents)
 
-        method = charge.get("method")
-        if not method or method not in ("equal", "proportional"):
-            raise MissingChargeMethodError("Should tax or tip be split equally or proportionally?")
+        charge_copy = dict(charge)
+        charge_copy["amountCents"] = charge_cents
+        allocated_charges.append(charge_copy)
 
-        amount = charge.get("amount")
-        percent = charge.get("percent")
+        pool = pools.setdefault(
+            charge["method"],
+            {"method": charge["method"], "kinds": [], "amountCents": 0},
+        )
+        pool["kinds"].append(charge["kind"])
+        pool["amountCents"] += charge_cents
 
-        if amount is not None and percent is not None:
-            raise ValueError("Charge cannot specify both amount and percent")
+    active = [
+        name for name in roster
+        if base_item_shares.get(name, 0) > 0
+    ]
+    if not active:
+        active = list(roster)
 
-        if amount is None and percent is None:
-            raise MissingChargeAmountError(f"How much was the {charge.get('kind', 'charge')}?")
+    total_cents = subtotal_cents
 
-        if amount is not None:
-            charge_cents = parse_money_to_cents(amount)
-        else:
-            percentage = Decimal(str(percent))
-            charge_cents = int(
-                (Decimal(subtotal_cents) * percentage / 100).quantize(
-                    Decimal("1"),
-                    rounding=ROUND_HALF_UP,
-                )
-            )
-
-        active = [
-            name for name in roster
-            if base_item_shares.get(name, 0) > 0
-        ]
-        if not active:
-            active = list(roster)
-
-        if method == "proportional":
+    for pool in pools.values():
+        if pool["method"] == "proportional":
             weights = [base_item_shares.get(name, 0) for name in active]
             if sum(weights) == 0:
                 weights = [1] * len(active)
@@ -262,7 +357,7 @@ def allocate_charges(
             weights = [1] * len(active)
 
         splits = split_cents(
-            charge_cents,
+            pool["amountCents"],
             weights,
             active,
             payer,
@@ -272,17 +367,16 @@ def allocate_charges(
         for name, cents in splits.items():
             current_shares[name] = current_shares.get(name, 0) + cents
 
-        total_cents += charge_cents
-
-        charge_copy = dict(charge)
-        charge_copy["amountCents"] = charge_cents
-        charge_copy["shares"] = splits
-        allocated_charges.append(charge_copy)
+        pool["shares"] = splits
+        total_cents += pool["amountCents"]
+        # The main payer pays tax, tip, and fees.
+        paid[payer] = paid.get(payer, 0) + pool["amountCents"]
 
     return {
         "totalCents": total_cents,
         "shares": current_shares,
+        "paid": paid,
         "lineItems": line_items,
         "charges": allocated_charges,
+        "chargeAllocations": list(pools.values()),
     }
-
