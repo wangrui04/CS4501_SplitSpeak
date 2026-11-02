@@ -910,4 +910,148 @@ describe('ALPHA-15: Scaffold React Application', () => {
       expect(balanceSpy).toHaveBeenCalledWith(1);
     });
   });
+
+  describe('ALPHA-25: Deliver US-06 Typos and Unclear Instructions End-to-End', () => {
+    it('executes US-06 multi-turn flow: recognizes typos, asks for clarification on "split the rest", and produces preview upon clarification', async () => {
+      vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
+      vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
+      const balanceSpy = vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+
+      const chatSpy = vi
+        .spyOn(api, 'sendChatMessage')
+        .mockResolvedValueOnce({
+          type: 'question',
+          status: 'pending',
+          promptCount: 1,
+          conversationId: 606,
+          question:
+            "I understand that Sarah and Kayla shared $16 nachos, and Rui had two $5 drinks. When you say 'split the rest evenly,' is there another charge to split?",
+        })
+        .mockResolvedValueOnce({
+          type: 'preview',
+          status: 'preview',
+          promptCount: 2,
+          conversationId: 606,
+          preview: {
+            payer: 'Sarah',
+            currency: 'USD',
+            totalCents: 2600,
+            description: 'Dinner',
+            validated: true,
+            lineItems: [
+              {
+                description: 'Nachos',
+                amountCents: 1600,
+                participants: ['Sarah', 'Kayla'],
+              },
+              {
+                description: 'Drinks (2)',
+                amountCents: 1000,
+                participants: ['Rui'],
+              },
+            ],
+            charges: [],
+            shares: [
+              { name: 'Sarah', cents: 800, summary: 'Dinner' },
+              { name: 'Kayla', cents: 800, summary: 'Dinner' },
+              { name: 'Rui', cents: 1000, summary: 'Dinner' },
+            ],
+          },
+        });
+
+      const confirmSpy = vi.spyOn(api, 'confirmExpense').mockResolvedValue({
+        ok: true,
+        expenseId: 126,
+        conversationId: 606,
+        status: 'confirmed',
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: 'Apartment 4B' })).toBeInTheDocument();
+      });
+
+      // Step 1: Open Add an expense modal
+      fireEvent.click(screen.getByRole('button', { name: /add an expense/i }));
+
+      // Step 2: Submit Prompt 1 with typos and unclear residual
+      const input = screen.getByPlaceholderText(/e\.g\. kayla and i shared nachos/i);
+      const sendBtn = screen.getByRole('button', { name: /send/i });
+
+      fireEvent.change(input, {
+        target: {
+          value:
+            'I paid for dinr. Me and Kayla shared nachoes for $16. Riu got 2 drnks for $5 each. Split the rest evenly.',
+        },
+      });
+      fireEvent.click(sendBtn);
+
+      expect(chatSpy).toHaveBeenNthCalledWith(1, {
+        groupId: 1,
+        conversationId: null,
+        message:
+          'I paid for dinr. Me and Kayla shared nachoes for $16. Riu got 2 drnks for $5 each. Split the rest evenly.',
+      });
+
+      // Step 3: Verify follow-up question is displayed and prompt counter increments
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            /when you say 'split the rest evenly,' is there another charge to split\?/i
+          )
+        ).toBeInTheDocument();
+      });
+      expect(screen.getByLabelText(/prompt count: 1 of 5/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('itemized-preview')).not.toBeInTheDocument();
+
+      // Step 4: Submit Prompt 2 clarification
+      fireEvent.change(input, {
+        target: {
+          value: "No, that's everything. No tax or tip.",
+        },
+      });
+      fireEvent.click(sendBtn);
+
+      expect(chatSpy).toHaveBeenNthCalledWith(2, {
+        groupId: 1,
+        conversationId: 606,
+        message: "No, that's everything. No tax or tip.",
+      });
+
+      // Step 5: Verify validated preview is displayed with prompt count 2 / 5
+      await waitFor(() => {
+        expect(screen.getByTestId('itemized-preview')).toBeInTheDocument();
+      });
+      expect(screen.getByLabelText(/prompt count: 2 of 5/i)).toBeInTheDocument();
+
+      // Verify line items and prices
+      expect(screen.getByText('Nachos')).toBeInTheDocument();
+      expect(screen.getByText('$16.00')).toBeInTheDocument();
+      expect(screen.getByText('Drinks (2)')).toBeInTheDocument();
+      expect(screen.getAllByText('$10.00').length).toBeGreaterThanOrEqual(1);
+
+      // Verify total
+      expect(screen.getAllByText('$26.00').length).toBeGreaterThanOrEqual(1);
+
+      // Verify shares ($8.00 for Sarah, $8.00 for Kayla, $10.00 for Rui)
+      expect(screen.getAllByText('$8.00').length).toBe(2);
+
+      // Step 6: Confirm expense
+      const confirmBtn = screen.getByRole('button', { name: /confirm expense/i });
+      fireEvent.click(confirmBtn);
+
+      expect(confirmSpy).toHaveBeenCalledWith(606);
+
+      await waitFor(() => {
+        expect(screen.getByText(/expense confirmed and saved/i)).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: /add an expense/i })).not.toBeInTheDocument();
+      });
+
+      expect(balanceSpy).toHaveBeenCalledWith(1);
+    });
+  });
 });

@@ -1803,6 +1803,319 @@ def test_us05_missing_participants_clarification_turn(db):
         assert shares == {"Sarah": 500, "Kayla": 500, "Rui": 500}
 
 
+def test_us06_typos_and_unclear_instructions_end_to_end(db):
+    """
+    ALPHA-25 / US-06: Messy Language, Typos, and Unclear Instructions.
+    Scenario:
+      Prompt 1: "I paid for dinr. Me and Kayla shared nachoes for $16. Riu got 2 drnks for $5 each. Split the rest evenly."
+      Expected AI Behavior:
+        - Recognizes "dinr" as dinner.
+        - Recognizes "nachoes" as nachos.
+        - Recognizes "Riu" as Rui.
+        - Recognizes "drnks" as drinks.
+        - Identifies that "split the rest evenly" is unclear (no total amount specified).
+        - Asks for clarification rather than assuming or inventing values.
+      AI Question:
+        "I understand that Sarah and Kayla shared $16 nachos, and Rui had two $5 drinks. When you say 'split the rest evenly,' is there another charge to split?"
+      Prompt 2:
+        "No, that's everything. No tax or tip."
+      Expected Result:
+        Payer: Sarah
+        Total: $26.00
+        Sarah: $8.00 (half of nachos)
+        Kayla: $8.00 (half of nachos)
+        Rui: $10.00 (two drinks @ $5.00)
+    Completed within 2 prompts (<= 5), validated preview, confirmed, and balances updated.
+    """
+    turn1_llm_output = {
+        "description": "Dinner",
+        "payer": "ME",
+        "items": [
+            {
+                "name": "Nachos",
+                "unitPrice": "16.00",
+                "quantity": 1,
+                "participants": {"mode": "only", "names": ["ME", "Kayla"]},
+            },
+            {
+                "name": "Drinks",
+                "unitPrice": "5.00",
+                "quantity": 2,
+                "participants": {"mode": "only", "names": ["Rui"]},
+            },
+        ],
+        "charges": [],
+        "statedTotal": None,
+        "openQuestions": [
+            {
+                "field": "charges",
+                "question": (
+                    "I understand that Sarah and Kayla shared $16 nachos, "
+                    "and Rui had two $5 drinks. When you say 'split the rest evenly,' "
+                    "is there another charge to split?"
+                ),
+            }
+        ],
+    }
+
+    turn2_llm_output = {
+        "description": "Dinner",
+        "payer": "ME",
+        "items": [
+            {
+                "name": "Nachos",
+                "unitPrice": "16.00",
+                "quantity": 1,
+                "participants": {"mode": "only", "names": ["ME", "Kayla"]},
+            },
+            {
+                "name": "Drinks",
+                "unitPrice": "5.00",
+                "quantity": 2,
+                "participants": {"mode": "only", "names": ["Rui"]},
+            },
+        ],
+        "charges": [],
+        "statedTotal": "26.00",
+        "openQuestions": [],
+    }
+
+    fake = FakeLlmClient([turn1_llm_output, turn2_llm_output])
+    app = create_app(
+        db=db,
+        session_secret="test-secret-with-at-least-32-characters",
+        llm=fake,
+    )
+
+    with TestClient(app) as client:
+        # Step 1: Sign in as Sarah
+        client.post("/api/session", json={"name": "Sarah"})
+        apartment = get_apartment(db)
+        group_id = apartment["id"]
+
+        # Step 2: Send Prompt 1 with typos and unclear "split the rest"
+        resp1 = client.post(
+            "/api/chat",
+            json={
+                "groupId": group_id,
+                "message": (
+                    "I paid for dinr. Me and Kayla shared nachoes for $16. "
+                    "Riu got 2 drnks for $5 each. Split the rest evenly."
+                ),
+            },
+        )
+        assert resp1.status_code == 200
+        data1 = resp1.json()
+
+        # Follow-up question is asked, not guessing residual amounts
+        assert data1["type"] == "question"
+        assert data1["status"] == "pending"
+        assert data1["promptCount"] == 1
+        assert "split the rest" in data1["question"].lower()
+        conv_id = data1["conversationId"]
+        assert conv_id is not None
+
+        # Verify nothing is saved yet
+        assert len(list_expenses(db, group_id)) == 0
+        assert get_group_balances(db, group_id) == {"Sarah": 0, "Kayla": 0, "Rui": 0}
+
+        # Step 3: Send Prompt 2 clarifying that there are no other charges
+        resp2 = client.post(
+            "/api/chat",
+            json={
+                "groupId": group_id,
+                "conversationId": conv_id,
+                "message": "No, that's everything. No tax or tip.",
+            },
+        )
+        assert resp2.status_code == 200
+        data2 = resp2.json()
+
+        assert data2["type"] == "preview"
+        assert data2["status"] == "preview"
+        assert data2["promptCount"] == 2
+        assert data2["promptCount"] <= 5
+
+        preview = data2["preview"]
+        assert preview["payer"] == "Sarah"
+        assert preview["totalCents"] == 2600
+        assert preview["currency"] == "USD"
+        assert preview["validated"] is True
+
+        # Check line items and quantities
+        nachos_item = next(item for item in preview["lineItems"] if "nacho" in item["name"].lower())
+        assert nachos_item["totalCents"] == 1600
+        assert set(nachos_item["shares"].keys()) == {"Sarah", "Kayla"}
+        assert nachos_item["shares"]["Sarah"] == 800
+        assert nachos_item["shares"]["Kayla"] == 800
+
+        drinks_item = next(item for item in preview["lineItems"] if "drink" in item["name"].lower())
+        assert drinks_item["totalCents"] == 1000
+        assert list(drinks_item["shares"].keys()) == ["Rui"]
+        assert drinks_item["shares"]["Rui"] == 1000
+
+        # Shares: Sarah $8.00, Kayla $8.00, Rui $10.00
+        shares = {s["name"]: s["cents"] for s in preview["shares"]}
+        assert shares == {
+            "Sarah": 800,
+            "Kayla": 800,
+            "Rui": 1000,
+        }
+        assert sum(shares.values()) == 2600
+
+        # Step 4: Confirm expense
+        confirm_res = client.post(f"/api/conversations/{conv_id}/confirm")
+        assert confirm_res.status_code == 200
+        confirm_data = confirm_res.json()
+        assert confirm_data["ok"] is True
+        assert confirm_data["status"] == "confirmed"
+
+        # Step 5: Verify saved database record
+        expenses = list_expenses(db, group_id)
+        assert len(expenses) == 1
+        saved = expenses[0]
+        assert saved["totalCents"] == 2600
+        assert saved["payer"] == "Sarah"
+        assert saved["shares"] == [
+            {"name": "Sarah", "cents": 800},
+            {"name": "Kayla", "cents": 800},
+            {"name": "Rui", "cents": 1000},
+        ]
+
+        # Step 6: Verify updated balances
+        final_balances = get_group_balances(db, group_id)
+        assert final_balances["Sarah"] == 1800   # Paid $26, owes $8 -> net +$18.00
+        assert final_balances["Kayla"] == -800   # Kayla owes $8 -> net -$8.00
+        assert final_balances["Rui"] == -1000    # Rui owes $10 -> net -$10.00
+        assert sum(final_balances.values()) == 0
 
 
+def test_us06_ambiguous_participant_name_asks_clarification(db):
+    """
+    US-06: Avoid guessing ambiguous participant names.
+    If a participant name cannot be uniquely identified, trigger a clarification question.
+    """
+    turn1_llm_output = {
+        "description": "Lunch",
+        "payer": "ME",
+        "items": [
+            {
+                "name": "Lunch",
+                "unitPrice": "20.00",
+                "quantity": 1,
+                "participants": {"mode": "only", "names": ["ME", "Allie"]},
+            }
+        ],
+        "charges": [],
+        "statedTotal": "20.00",
+        "openQuestions": [
+            {
+                "field": "items[0].participants",
+                "question": "Unknown member Allie. Which group member did you mean?",
+            }
+        ],
+    }
+
+    turn2_llm_output = {
+        "description": "Lunch",
+        "payer": "ME",
+        "items": [
+            {
+                "name": "Lunch",
+                "unitPrice": "20.00",
+                "quantity": 1,
+                "participants": {"mode": "only", "names": ["ME", "Kayla"]},
+            }
+        ],
+        "charges": [],
+        "statedTotal": "20.00",
+        "openQuestions": [],
+    }
+
+    fake = FakeLlmClient([turn1_llm_output, turn2_llm_output])
+    app = create_app(
+        db=db,
+        session_secret="test-secret-with-at-least-32-characters",
+        llm=fake,
+    )
+
+    with TestClient(app) as client:
+        client.post("/api/session", json={"name": "Sarah"})
+        apartment = get_apartment(db)
+        group_id = apartment["id"]
+
+        resp1 = client.post(
+            "/api/chat",
+            json={"groupId": group_id, "message": "I paid $20 for lunch with Allie."},
+        )
+        assert resp1.status_code == 200
+        data1 = resp1.json()
+        assert data1["type"] == "question"
+        assert "Allie" in data1["question"]
+
+        conv_id = data1["conversationId"]
+        resp2 = client.post(
+            "/api/chat",
+            json={
+                "groupId": group_id,
+                "conversationId": conv_id,
+                "message": "I meant Kayla.",
+            },
+        )
+        assert resp2.status_code == 200
+        data2 = resp2.json()
+        assert data2["type"] == "preview"
+        assert data2["preview"]["totalCents"] == 2000
+        shares = {s["name"]: s["cents"] for s in data2["preview"]["shares"]}
+        assert shares == {"Sarah": 1000, "Kayla": 1000, "Rui": 0}
+
+
+def test_us06_demo_client_interactive(db):
+    """
+    US-06: Verify DemoLlmClient can execute the US-06 typo scenario end-to-end.
+    """
+    from backend.llm import DemoLlmClient
+
+    app = create_app(
+        db=db,
+        session_secret="test-secret-with-at-least-32-characters",
+        llm=DemoLlmClient(),
+    )
+
+    with TestClient(app) as client:
+        client.post("/api/session", json={"name": "Sarah"})
+        apartment = get_apartment(db)
+        group_id = apartment["id"]
+
+        # Prompt 1
+        resp1 = client.post(
+            "/api/chat",
+            json={
+                "groupId": group_id,
+                "message": (
+                    "I paid for dinr. Me and Kayla shared nachoes for $16. "
+                    "Riu got 2 drnks for $5 each. Split the rest evenly."
+                ),
+            },
+        )
+        assert resp1.status_code == 200
+        data1 = resp1.json()
+        assert data1["type"] == "question"
+        assert "split the rest" in data1["question"].lower()
+
+        # Prompt 2
+        resp2 = client.post(
+            "/api/chat",
+            json={
+                "groupId": group_id,
+                "conversationId": data1["conversationId"],
+                "message": "No, that's everything. No tax or tip.",
+            },
+        )
+        assert resp2.status_code == 200
+        data2 = resp2.json()
+        assert data2["type"] == "preview"
+        assert data2["preview"]["totalCents"] == 2600
+        shares = {s["name"]: s["cents"] for s in data2["preview"]["shares"]}
+        assert shares == {"Sarah": 800, "Kayla": 800, "Rui": 1000}
 

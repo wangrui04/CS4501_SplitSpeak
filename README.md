@@ -87,8 +87,49 @@ The guide covers:
 - Setting up the Python virtual environment
 - Installing dependencies
 - Configuring environment variables
-- Running the React frontend
+- Running the full application locally
 - Running automated tests
+
+---
+
+## Running the Application Locally
+
+The application consists of a FastAPI backend and a React frontend. Run each in a separate terminal:
+
+### 1. Start the Backend API (Terminal 1)
+
+From the project root:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m uvicorn backend.main:get_app --factory --port 8000 --reload
+```
+
+- The API server runs at `http://127.0.0.1:8000`.
+- The SQLite database is automatically created and seeded with sample groups (`Apartment 4B` and `Weekend trip`).
+- If `ANTHROPIC_API_KEY` is provided in `.env`, the assistant connects to Claude. Otherwise, a built-in demo assistant handles sample splitting scenarios out of the box.
+
+### 2. Start the React Frontend (Terminal 2)
+
+In a second terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+*(Or from the repository root: `npm --prefix frontend run dev`)*.
+
+- The Vite dev server starts at `http://localhost:5173`.
+- API calls to `/api/*` are automatically proxied to `http://127.0.0.1:8000`.
+
+### 3. Open in Your Browser
+
+Navigate to **[http://localhost:5173](http://localhost:5173)**:
+
+1. **Sign in:** Pick a user (e.g. **Sarah**, **Kayla**, or **Rui**) and click **Continue as...**.
+2. **Dashboard:** View group balances, active group details, and friend lists.
+3. **Add an Expense:** Click **+ Add an expense** and either click quick examples (*Try restaurant split*, *Try groceries*) or describe your expense in natural language.
+4. **Confirm:** Review the itemized breakdown and confirm the expense to update balances live.
 
 ---
 

@@ -38,6 +38,67 @@ class DemoLlmClient:
         text = last_msg.lower()
         all_text = " ".join(m.get("content", "") for m in messages).lower()
 
+        # US-06: Typos and unclear instructions ("the rest", "dinr", "nachoes", "riu", "drnks")
+        if (
+            "the rest" in all_text
+            or "dinr" in all_text
+            or "nachoes" in all_text
+            or "riu" in all_text
+            or "drnks" in all_text
+        ):
+            if any(term in text for term in ["everything", "no", "that's it", "none"]):
+                return {
+                    "description": "Dinner",
+                    "payer": "ME",
+                    "items": [
+                        {
+                            "name": "Nachos",
+                            "unitPrice": "16.00",
+                            "quantity": 1,
+                            "participants": {"mode": "only", "names": ["ME", "Kayla"]},
+                        },
+                        {
+                            "name": "Drinks",
+                            "unitPrice": "5.00",
+                            "quantity": 2,
+                            "participants": {"mode": "only", "names": ["Rui"]},
+                        },
+                    ],
+                    "charges": [],
+                    "statedTotal": "26.00",
+                    "openQuestions": [],
+                }
+            return {
+                "description": "Dinner",
+                "payer": "ME",
+                "items": [
+                    {
+                        "name": "Nachos",
+                        "unitPrice": "16.00",
+                        "quantity": 1,
+                        "participants": {"mode": "only", "names": ["ME", "Kayla"]},
+                    },
+                    {
+                        "name": "Drinks",
+                        "unitPrice": "5.00",
+                        "quantity": 2,
+                        "participants": {"mode": "only", "names": ["Rui"]},
+                    },
+                ],
+                "charges": [],
+                "statedTotal": None,
+                "openQuestions": [
+                    {
+                        "field": "charges",
+                        "question": (
+                            f"I understand that {current_user} and Kayla shared $16 nachos, "
+                            "and Rui had two $5 drinks. When you say 'split the rest evenly,' "
+                            "is there another charge to split?"
+                        ),
+                    }
+                ],
+            }
+
         # US-05 multi-turn clarification (missing prices)
         if "nacho" in all_text and "drink" in all_text:
             if "16" in text or "5" in text:
@@ -242,8 +303,10 @@ class ClaudeLlmClient:
             "Represent I/me as ME. "
             "Use all_except for everyone except a member. "
             "Ask about unknown details using openQuestions. "
-            "Correct name typos only when unambiguous. "
-            "Ask about ambiguous participant references. "
+            "Correct obvious typos in descriptions and item names (e.g. 'dinr' -> 'Dinner', 'drnks' -> 'Drinks', 'nachoes' -> 'Nachos'). "
+            "Correct member name typos only when unambiguous (e.g. 'Riu' -> 'Rui'). "
+            "Never guess ambiguous participant names; ask using openQuestions. "
+            "When instructions are unclear or refer to an unspecified residual (e.g. 'split the rest' without an additional total), ask for clarification via openQuestions. "
             f"Group roster: {roster}. "
             f"Signed-in user: {current_user}."
         )

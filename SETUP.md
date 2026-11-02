@@ -171,13 +171,23 @@ Keep this terminal running while using the frontend.
 
 ## 7. Backend Server
 
-The backend currently exposes its FastAPI application through a `create_app()` factory that requires a database connection and session secret.
+The backend runs on FastAPI and Uvicorn.
 
-Before starting a standalone API server, a development entry point must initialize the database and call `create_app()`.
+From the repository root:
 
-Once that entry point is configured, FastAPI can be started through Uvicorn.
+```bash
+PYTHONPATH=src .venv/bin/python -m uvicorn backend.main:get_app --factory --port 8000 --reload
+```
 
-**Note:** At this stage, the frontend and backend are separate. Frontend-to-backend integration is still a development task.
+For Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"; .venv\Scripts\python -m uvicorn backend.main:get_app --factory --port 8000 --reload
+```
+
+- The API server starts on `http://127.0.0.1:8000`.
+- The database is automatically initialized and seeded with sample groups (`Apartment 4B` and `Weekend trip`).
+- The React frontend running on `http://localhost:5173` proxies all `/api/*` requests directly to this backend.
 
 ---
 
