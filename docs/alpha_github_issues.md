@@ -1516,3 +1516,171 @@ The results must be reported accurately, including failures and unresolved cases
 - The application must use deterministic arithmetic and validation regardless of which LLM is selected.
 
 **The primary Alpha goal remains demonstrating accurate conversational expense splitting through a validated, test-driven implementation.**
+
+# Alpha issue updates: new five-scenario benchmark (`Benchmarks.docx`)
+
+Rewrites of **ALPHA-28, 31, 32, and 33**. For each: edit the existing GitHub issue, replace the title and everything from the **Labels** line down, and keep your assignee. Update labels and milestone in the sidebar if they differ. The "Edit note" blocks are for you; don't paste them.
+
+**Assumption:** this benchmark **replaces** the six user-story scenarios as the official alpha measurement.
+- 5 scenarios × 3 testers = **15 attempts, ≥ 14 must pass** (14/15 = 93.3%; 13/15 = 86.7% fails).
+- Scenario difficulty labels: B1 Basic, B2 Moderate, B3 Intermediate, B4 Advanced, B5 Most complex.
+- The old US-01…US-06 scenario files stay in the repo as **informational** cases.
+
+**Answer keys used below (all amounts exact to the cent):**
+
+| Scenario | Cost share (Sarah / Rui / Kayla) | Paid (Sarah / Rui / Kayla) | Settlement | Expected prompts |
+|---|---|---|---|---|
+| B1 Basic | $32.00 / $32.00 / $32.00 | $96.00 / – / – | Rui → Sarah $32.00; Kayla → Sarah $32.00 | 1 |
+| B2 Moderate | $30.80 / $23.10 / $38.50 | $92.40 / – / – | Rui → Sarah $23.10; Kayla → Sarah $38.50 | 2 |
+| B3 Intermediate | $28.27 / $52.50 / $24.23 | $105.00 / – / – | Rui → Sarah $52.50; Kayla → Sarah $24.23 | 2 |
+| B4 Advanced | $445.00 / $400.00 / $205.00 | $840.00 / $120.00 / $90.00 | Rui → Sarah $280.00; Kayla → Sarah $115.00 | 2 |
+| B5 Most complex | $257.50 / $267.50 / $155.00 | $500.00 (net of $100 refund) / $120.00 / $60.00 | Rui → Sarah $147.50; Kayla → Sarah $95.00 | 3 |
+
+---
+
+## ALPHA-28 (rewritten)
+
+> **Edit note:** Pairwise balances are replaced by net-position settlement, because the benchmark's "final settlement" is each person's cost share minus what they paid, settled against whoever is owed overall. Example (B4): pairwise would say Kayla owes Rui $40; the key says Rui pays Sarah $280 and Kayla pays Sarah $115. Priority raised from P1 to **P0** and estimate from 2h to **3h**, since the benchmark now checks settlement.
+
+**Title:** Compute net settlement and group balances API
+
+**Labels:** `feature` `backend` `testing` `sprint-2` `P0`
+**Assignee:** TBD · **Suggested role:** B (Backend/LLM)
+**Milestone:** Alpha Sprint 2 (Nov 2 – Nov 4)
+**Estimate:** 3h · **Depends on:** ALPHA-08, ALPHA-14, and the multi-payer / refund data model (upstream work, see ALPHA-31) · **Parent story:** US-09, Benchmarks B1–B5
+
+### User story
+As a group member, I want to see exactly who pays whom to settle up, so that I know what I owe and what I'm owed.
+
+### Description
+Replace pairwise balances with net settlement. For each person: `net = total paid − total cost share`. People with a negative net pay people with a positive net.
+
+### Acceptance criteria
+- [ ] Pure function in `shared`: `computeSettlement(expenses)` returns `{ nets: [{name, netCents}], transfers: [{from, to, cents}] }`. Each expense has `payments[]` and `shares[]`. A single-payer expense is `payments = [{payer, total}]`, so existing data keeps working.
+- [ ] A refund received counts as negative paid (B5: Sarah paid $600 and received a $100 refund, so her net paid is $500).
+- [ ] Transfer rule: greedy, with the largest debtor paying the largest creditor until one reaches zero; ties broken by roster order. Deterministic. At most n − 1 transfers; never zero, negative, or self-transfers.
+- [ ] If the sum of nets is not 0 (payments ≠ shares), return an error and no transfers (the validator should already have caught it).
+- [ ] `GET /api/groups/:id` returns `nets`, `transfers`, a per-member balance relative to the session user ("owes you $X" / "you owe $X" / "settled up", derived from transfers involving the session user), and `summary` {`totalBalance` = my net, `youOwe` = transfers from me, `youAreOwed` = transfers to me}.
+- [ ] Preview responses from the chat API (ALPHA-13) include `paid`, `shares`, and `settlement`, computed by the same function. Testers and the benchmark read the same numbers.
+- [ ] AI and manual expenses count identically; roster-only people appear with 0. Integer cents everywhere.
+
+### Design notes
+Net settlement is the "simplified debts" approach: a person who owes someone other than you shows as "settled up" relative to you. The preview card (ALPHA-18) needs one more section listing transfers ("Rui pays Sarah $23.10"). Flag that to its owner.
+
+### Test requirements (write first, using the benchmark keys as test vectors)
+- [ ] **B1:** Sarah paid $96, shares $32 each → Rui → Sarah $32, Kayla → Sarah $32.
+- [ ] **B2:** shares $30.80 / $23.10 / $38.50, Sarah paid $92.40 → Rui → Sarah $23.10, Kayla → Sarah $38.50 (Sarah receives $61.60).
+- [ ] **B3:** shares $28.27 / $52.50 / $24.23, Sarah paid $105 → Rui → Sarah $52.50, Kayla → Sarah $24.23 (Sarah receives $76.73).
+- [ ] **B4:** paid $840 / $120 / $90, shares $445 / $400 / $205 → Rui → Sarah $280, Kayla → Sarah $115. This fails any implementation that is still pairwise.
+- [ ] **B5:** Sarah paid $600 and received a $100 refund (net $500), Rui $120, Kayla $60; shares $257.50 / $267.50 / $155 → Rui → Sarah $147.50, Kayla → Sarah $95.
+- [ ] Two creditors: nets Sarah +$100, Kayla +$50, Rui −$150 → Rui pays Sarah $100, then Kayla $50.
+- [ ] Unbalanced input (sum of nets ≠ 0) → error, no transfers.
+- [ ] Property tests (fast-check) on balanced random nets: applying all transfers zeroes every net; no transfer ≤ 0; no self-transfer; at most n − 1 transfers; deterministic.
+- [ ] API: after B4, as Sarah → `youAreOwed` $395, `youOwe` $0; as Kayla → `youOwe` $115 (to Sarah) and Rui's row shows "settled up". Empty group → all zeros.
+
+---
+
+## ALPHA-31 (rewritten)
+
+> **Edit note:** The runner now targets the five benchmark scenarios, supports turns that are sent unprompted (B5's correction), and compares each person's cost share, amount paid, and settlement transfers. Scenario prompts are copied verbatim from `Benchmarks.docx`. The old US-01…US-06 files move to `benchmark/scenarios/legacy/` and run only as informational cases. Estimate stays at 4h (about 1h converting scenarios, 3h runner); if it overruns, split the scenario conversion into its own issue.
+
+**Title:** Build benchmark runner for the five benchmark scenarios (3 runs)
+
+**Labels:** `feature` `testing` `ai` `benchmark` `sprint-2` `P0`
+**Assignee:** TBD · **Suggested role:** C (QA/Validator)
+**Milestone:** Alpha Sprint 2 (Nov 2 – Nov 4)
+**Estimate:** 4h · **Depends on:** ALPHA-13, ALPHA-28, and the upstream work for multi-payer expenses, weighted/per-night splits, refunds, corrections after a preview (ALPHA-38, now required), and pooling same-method tax + tip into one allocation (ALPHA-21) · **Parent story:** Benchmarks B1–B5
+
+### Description
+`npm run benchmark -- --runs 3 --model claude-sonnet-5-5` loads `benchmark/scenarios/official/*.json` and drives each scenario against the real LLM through the chat API (Fastify `inject`, fresh in-memory DB per run, signed in as Sarah). Put a copy of the team's benchmark document at `docs/benchmarks.md` as the source of truth.
+
+### Scenario turns (copy verbatim; typos are intentional)
+Each turn has a `send` mode: `always` or `if_asked` (sent only when the bot's last response was a question).
+
+- **B1 Basic** (expect no question):
+  1. `sarah rui and kayla got dinner and it was 96 total w tax and tip. i paid the whole thing im sarah. split evenly pls` (always)
+- **B2 Moderate:**
+  1. `dinner was me rui and kayla. im sarah. ruis meal was 18 mine was 24 and kaylas was 30. everyone pays for their own food` (always)
+  2. `i paid. tax was $6 and tip was 14.40. split both proportionally based on what we ordered` (if_asked)
+- **B3 Intermediate:**
+  1. `rui and i split nachos and rui and kayla shared a pizza. everyone but kayla got a marg. i paid can u split it` (always)
+  2. `nachos 18 pizza 36 and margs 12 each. yes equal for the shared food and one marg each. tax 9 tip 18 split those proportionally` (if_asked)
+- **B4 Advanced:**
+  1. `trip was me rui and kayla. i paid 840 for the house, rui paid 120 groceries for everyone and kayla paid 90 for transportation just for me and her. me and rui stayed 3 nights kayla only stayed 1. split it fairly` (always)
+  2. `yes to all of that. groceries equal even tho kayla stayed less. those are the final totals` (if_asked)
+- **B5 Most complex:**
+  1. `im sarah. trip w rui and kayla. i paid 600 lodging. me and rui stayed 3 nights kayla stayed 2. split lodging per person per night. rui paid dinner 120 split equal between all 3. kayla paid 60 taxi everyone except rui split equal. all amounts final no extra tax or fees` (always)
+  2. `wait kayla didnt eat dinner actually. rui said shed cover twice as much dinner as me. also i got a 100 refund on the lodging` (always; sent even if the bot already showed a preview). Use the wording the team finalizes: "shed" could be read as ambiguous, so "hed" is suggested. Update the verbatim snapshot test at the same time.
+  3. `yes same proportions and the refund went back to me` (if_asked)
+
+### Acceptance criteria
+- [ ] Scenario JSON schema: `id`, `label` (Basic … Most complex), `signedInAs: "Sarah"`, `turns[]` {`text`, `send`}, `expected` {`shares`, `paid`, `settlement[]`, `expectedPrompts`}, `informational` (bool), `behavior` {`mustAskBeforeFinalPreview` or `mustNotAsk`}. Amounts stored as integer cents.
+- [ ] Runner logic: send turn 1. After each response, send the next turn if its mode is `always`, or if it is `if_asked` and the last response was a question. Stop at a preview when no `always` turns remain. A question with no turns left fails the run with "ran out of script". Stop after 5 prompts.
+- [ ] **Pass** = every person's cost share, every person's amount paid, and every settlement transfer match the key to the cent, **and** `promptCount ≤ 5`.
+- [ ] Behavior checks (B1 asked nothing; B2–B5 asked at least one clarifying question before the final preview) are **recorded and reported but do not change pass/fail** (the hypothesis defines pass as a correct split within 5 prompts). Change this if the team wants them strict.
+- [ ] Records pass/fail, per-field mismatches, `promptCount`, failure reason, model, prompt version, commit SHA, and timestamp to `benchmark/results/<timestamp>.json`.
+- [ ] Refuses to run in CI or without an API key. `--model` for Sonnet vs Haiku comparison. Legacy and informational scenarios run only with `--include-informational` and are excluded from pass rates.
+
+### Test requirements (write first, fake LLM)
+- [ ] Comparator: exact match passes; one cent off in a share fails with the field named; wrong settlement direction fails; wrong amount paid fails; correct result but 6 prompts fails.
+- [ ] Runner flow, B1: preview after turn 1 → done in 1 prompt, no `if_asked` turns sent.
+- [ ] Runner flow, B5: preview after turn 1 → the `always` correction is still sent → bot asks about the refund → turn 3 sent → preview, `promptCount === 3`.
+- [ ] A question with no turns left → "ran out of script". Results file validates against its schema.
+- [ ] **Key sanity test:** for every scenario, `sum(shares) === sum(paid)` and `computeSettlement(paid − shares)` (ALPHA-28) equals the key's transfers. This catches typos in the answer keys.
+- [ ] **Verbatim test:** the prompts in the scenario files exactly equal the strings in `docs/benchmarks.md`.
+
+---
+
+## ALPHA-32 (rewritten)
+
+> **Edit note:** Five scenarios instead of six, labeled by difficulty rather than three tiers. The threshold note changes: one automated run passes at 90% only at 5/5 (4/5 = 80%). Adds flaky-scenario detection and settlement/refund/correction failure categories.
+
+**Title:** Generate benchmark report with Run 1/2/3 and per-scenario pass rates
+
+**Labels:** `feature` `testing` `benchmark` `sprint-2` `P0`
+**Assignee:** TBD · **Suggested role:** C (QA/Validator)
+**Milestone:** Alpha Sprint 2 (Nov 2 – Nov 4)
+**Estimate:** 2.5h · **Depends on:** ALPHA-31 · **Parent story:** Benchmarks B1–B5
+
+### Acceptance criteria
+- [ ] `npm run benchmark:report` outputs a markdown table: one row per scenario (B1 Basic … B5 Most complex); columns **Run 1 | Run 2 | Run 3**; each cell shows pass/fail and prompts used (e.g., "✅ 2 prompts", "❌ 4 prompts, Kayla's share off by $0.01").
+- [ ] Pass rate per run and overall. **Run 1 is labeled official.** Model, prompt version, and commit SHA are shown.
+- [ ] Threshold line states pass/fail against 90% and explains that a single automated run of 5 scenarios passes only at 5/5 (4/5 = 80%). The official result is the 15-attempt human session in ALPHA-33 (≥ 14/15).
+- [ ] A **flaky** marker (⚠) on any scenario whose result differs across runs.
+- [ ] Behavior-check column (asked / didn't ask as expected) from the runner, shown separately from pass/fail.
+- [ ] Failure reasons grouped by category: participants, quantities, amounts, tax/tip, multiple payers, weights/nights, refund, correction, settlement, prompt limit.
+
+### Test requirements (write first)
+- [ ] Fixture results: 5/5 → PASS; 4/5 → 80% and FAIL; scenario passing 2 of 3 runs → flaky marker.
+- [ ] Handles a missing run column. Failure categories group correctly.
+- [ ] Snapshot test of the markdown output.
+
+---
+
+## ALPHA-33 (rewritten)
+
+> **Edit note:** 3 testers × 5 benchmark scenarios = 15 attempts, ≥ 14 to pass. Pass now includes amount paid and settlement, not just shares. Testers copy-paste the prompts, because the typos are part of the test. If your teammate is already running the benchmark by hand, that run **is** this session (agree who records it so you don't do it twice).
+
+**Title:** Run alpha test session (3 testers × 5 benchmark scenarios) and record results
+
+**Labels:** `chore` `testing` `benchmark` `sprint-2` `P0`
+**Assignee:** TBD · **Suggested role:** All three
+**Milestone:** Alpha Sprint 2 (Nov 2 – Nov 4)
+**Estimate:** 3h (team total) · **Depends on:** ALPHA-17, ALPHA-18, ALPHA-14, ALPHA-28, ALPHA-31, ALPHA-32, and the upstream benchmark work (see ALPHA-31) · **Parent story:** Benchmarks B1–B5
+
+### Description
+The official alpha measurement. Each team member independently runs all 5 scenarios through the UI signed in as Sarah, using the exact prompts from `docs/benchmarks.md`.
+
+### Acceptance criteria
+- [ ] **Before the session:** record model, prompt version, and commit SHA in `docs/alpha-results.md`, then freeze them. No prompt or code changes during the session.
+- [ ] Testers **copy-paste** the prompts (never retype). Follow-up replies use the scripted text whenever the bot asks something it needs. B5's correction is sent unprompted after the first preview.
+- [ ] Each tester starts a fresh conversation per scenario and records: tester, scenario, conversation ID, prompts used, whether shares / amount paid / settlement each match (Y/N), pass/fail, notes.
+- [ ] 15 attempts. **Pass** = every person's cost share, amount paid, and settlement transfer match the key exactly **and** within 5 prompts. Success = **≥ 14 of 15**.
+- [ ] Report results per scenario, so a failing scenario across all three testers shows up as one root cause rather than three separate misses. Also report failure categories.
+- [ ] Optional: repeat for Run 2 and Run 3 for consistency. Run 1 is official.
+- [ ] Short written decision (Activity 1): **Validated** or **Invalidated / pivot**, backed by the numbers. If it fails, give the root cause, fix plan, and retest plan.
+- [ ] State the limitations: three testers typing identical scripts give correlated results, and the team wrote both the benchmark and the product.
+- [ ] Attach the ALPHA-32 automated report as supporting evidence.
+
+### Test requirements
+N/A (manual session). Evidence: the committed `docs/alpha-results.md` and the benchmark report.
