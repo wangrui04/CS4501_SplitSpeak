@@ -1,0 +1,20 @@
+{
+  "id": "MESSY-3",
+  "label": "Contradictory instruction",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "i paid 30 for dinner, split evenly but rui had double",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustEndWithQuestion": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "notes": "'Evenly' contradicts 'double', so the bot must ask."
+}

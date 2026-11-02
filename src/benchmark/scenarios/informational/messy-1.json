@@ -1,0 +1,20 @@
+{
+  "id": "MESSY-1",
+  "label": "All lowercase, no payer",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "kayla n i split pizza 24",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustEndWithQuestion": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "notes": "No payer is given, so the bot must ask who paid."
+}

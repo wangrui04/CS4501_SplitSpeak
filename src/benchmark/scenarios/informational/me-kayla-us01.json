@@ -1,0 +1,44 @@
+{
+  "id": "ME-KAYLA-US01",
+  "label": "US-01 signed in as Kayla",
+  "signedInAs": "Kayla",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I paid $30 for dinner for Sarah, Kayla, and Rui. Split it equally.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustNotAsk": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 1000,
+      "Kayla": 1000,
+      "Rui": 1000
+    },
+    "paid": {
+      "Sarah": 0,
+      "Kayla": 3000,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Sarah",
+        "to": "Kayla",
+        "cents": 1000
+      },
+      {
+        "from": "Rui",
+        "to": "Kayla",
+        "cents": 1000
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}

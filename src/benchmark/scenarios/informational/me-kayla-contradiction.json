@@ -1,0 +1,20 @@
+{
+  "id": "ME-KAYLA-CONTRADICTION",
+  "label": "'Kayla and I' signed in as Kayla",
+  "signedInAs": "Kayla",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "Kayla and I shared $16 nachos and I paid.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustEndWithQuestion": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "notes": "Signed in as Kayla, 'Kayla and I' is contradictory and must trigger a question."
+}

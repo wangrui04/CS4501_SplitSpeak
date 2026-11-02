@@ -1,0 +1,20 @@
+{
+  "id": "MESSY-4",
+  "label": "Unknown name",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "Allie and I split a $20 pizza. I paid.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustEndWithQuestion": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "notes": "Allie is not in the group, so the bot must ask."
+}
