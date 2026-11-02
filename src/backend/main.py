@@ -1,8 +1,11 @@
 
 import os
+import time
+
 from fastapi import Body, FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from itsdangerous import TimestampSigner, BadSignature
 
@@ -20,7 +23,19 @@ from backend.repository import (
     save_expense,
 )
 from backend.manual import ManualEntryError, build_manual_expense
-from backend.config import MAX_PROMPTS_PER_CONVERSATION
+from backend.config import (
+    CHAT_RATE_LIMIT_PER_MINUTE,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_WEB_ORIGINS,
+    MAX_MESSAGE_LENGTH,
+    MAX_PROMPTS_PER_CONVERSATION,
+)
+from backend.security import (
+    SECURITY_HEADERS,
+    RateLimiter,
+    install_secret_redaction,
+    sanitize_message,
+)
 from backend.pipeline import parse_turn
 from backend.settlement import compute_settlement, member_balances
 from backend.schemas import (
@@ -35,10 +50,22 @@ class Login(BaseModel):
     name: str
 
 
-def create_app(db, session_secret, llm=None):
+def create_app(
+    db,
+    session_secret,
+    llm=None,
+    clock=time.monotonic,
+    web_origins=DEFAULT_WEB_ORIGINS,
+):
     app = FastAPI()
     app.state.llm = llm
     app.state.db = db
+    chat_limiter = RateLimiter(
+        limit=CHAT_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60,
+        clock=clock or time.monotonic,
+    )
+    install_secret_redaction()
 
     def known_names():
         names = []
@@ -113,13 +140,29 @@ def create_app(db, session_secret, llm=None):
 
         return await call_next(request)
 
-    # Register SessionMiddleware last so that it runs first.
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
+
+    # Register SessionMiddleware after protect() so that it runs first.
     # This initializes request.session before protect() uses it.
     app.add_middleware(
         SessionMiddleware,
         secret_key=session_secret,
         same_site="lax",
         https_only=False,
+    )
+
+    # Outermost, so 401 and 429 responses still carry CORS headers.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(web_origins),
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type"],
     )
 
     @app.get("/health")
@@ -236,7 +279,10 @@ def create_app(db, session_secret, llm=None):
         if api_key:
             from backend.llm import ClaudeLlmClient
 
-            return ClaudeLlmClient(api_key=api_key)
+            return ClaudeLlmClient(
+                api_key=api_key,
+                model=os.environ.get("LLM_MODEL") or DEFAULT_LLM_MODEL,
+            )
         raise HTTPException(
             status_code=500,
             detail="LLM client not configured",
@@ -250,6 +296,27 @@ def create_app(db, session_secret, llm=None):
                 status_code=401, detail="Sign in required"
             )
 
+        if not chat_limiter.allow(current_user):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many messages. Try again in a minute.",
+            )
+
+        message_text = sanitize_message(payload.message)
+        if not message_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Message cannot be empty",
+            )
+        if len(message_text) > MAX_MESSAGE_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Message is too long (maximum {MAX_MESSAGE_LENGTH} "
+                    "characters)"
+                ),
+            )
+
         group_id = payload.group_id
         conversation_id = payload.conversation_id
 
@@ -259,6 +326,11 @@ def create_app(db, session_secret, llm=None):
                 raise HTTPException(
                     status_code=404,
                     detail="Conversation not found",
+                )
+            if conv["status"] in ("confirmed", "unsuccessful"):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This conversation is closed. Start a new one.",
                 )
             if group_id is not None and conv["groupId"] != group_id:
                 raise HTTPException(
@@ -285,13 +357,6 @@ def create_app(db, session_secret, llm=None):
             raise HTTPException(
                 status_code=403,
                 detail="Not a member of this group",
-            )
-
-        message_text = payload.message.strip()
-        if not message_text:
-            raise HTTPException(
-                status_code=400,
-                detail="Message cannot be empty",
             )
 
         if conv is None:
@@ -622,7 +687,18 @@ def get_app():
 
         llm = DemoLlmClient()
 
-    return create_app(db, session_secret, llm=llm)
+    web_origins = [
+        origin.strip()
+        for origin in os.environ.get("WEB_ORIGINS", "").split(",")
+        if origin.strip()
+    ] or DEFAULT_WEB_ORIGINS
+
+    return create_app(
+        db,
+        session_secret,
+        llm=llm,
+        web_origins=web_origins,
+    )
 
 
 if __name__ == "__main__":
