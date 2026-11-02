@@ -69,6 +69,18 @@ def parse_turn(*, llm, conversation, roster, current_user):
                 ),
             }
 
+        names = item["participants"]["names"]
+        if "ME" in names and current_user in names:
+            # "Kayla and I" while signed in as Kayla: don't guess.
+            return {
+                "type": "question",
+                "question": (
+                    f"You're signed in as {current_user}, but "
+                    f"{item['name']} lists both {current_user} and you. "
+                    "Who else shared it?"
+                ),
+            }
+
         try:
             sharers = resolve_participants(
                 item["participants"],
