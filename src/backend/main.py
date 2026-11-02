@@ -1,6 +1,6 @@
 
 import os
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import Body, FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
@@ -17,7 +17,9 @@ from backend.repository import (
     confirm_conversation_expense,
     get_group_balances,
     list_expenses,
+    save_expense,
 )
+from backend.manual import ManualEntryError, build_manual_expense
 from backend.config import MAX_PROMPTS_PER_CONVERSATION
 from backend.pipeline import parse_turn
 from backend.settlement import compute_settlement, member_balances
@@ -205,6 +207,26 @@ def create_app(db, session_secret, llm=None):
         member_group_or_error(group_id, request)
         # Newest first, as on the group page.
         return list(reversed(list_expenses(db, group_id)))
+
+    @app.post("/api/groups/{group_id}/expenses/manual")
+    def manual_expense(
+        group_id: int,
+        request: Request,
+        payload: dict = Body(...),
+    ):
+        group_data = member_group_or_error(group_id, request)
+
+        try:
+            expense = build_manual_expense(payload, group_data["members"])
+            saved = save_expense(db, {
+                **expense,
+                "groupId": group_id,
+                "createdBy": request.session.get("name"),
+            })
+        except ManualEntryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        return {"ok": True, "expenseId": saved["id"]}
 
     def get_llm():
         active_llm = getattr(app.state, "llm", None)
