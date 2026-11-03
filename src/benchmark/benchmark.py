@@ -16,13 +16,16 @@ class BenchmarkRefused(RuntimeError):
     pass
 
 
+API_KEYS = {"claude": "ANTHROPIC_API_KEY", "gemini": "GEMINI_API_KEY"}
+
+
 def check_allowed(provider: str, env) -> None:
-    if provider != "claude":
+    if provider not in API_KEYS:
         return
     if env.get("CI"):
-        raise BenchmarkRefused("Refusing to call the paid LLM API in CI. Use --provider fake.")
-    if not env.get("ANTHROPIC_API_KEY"):
-        raise BenchmarkRefused("ANTHROPIC_API_KEY is not set.")
+        raise BenchmarkRefused("Refusing to call a live LLM API in CI. Use --provider fake.")
+    if not env.get(API_KEYS[provider]):
+        raise BenchmarkRefused(f"{API_KEYS[provider]} is not set.")
 
 
 def make_llm(provider: str, model: str, env):
@@ -30,6 +33,11 @@ def make_llm(provider: str, model: str, env):
         from backend.llm import FixtureLlmClient
 
         return FixtureLlmClient()
+
+    if provider == "gemini":
+        from backend.llm import GeminiLlmClient
+
+        return GeminiLlmClient(api_key=env["GEMINI_API_KEY"], model=model)
 
     from backend.llm import ClaudeLlmClient
 
@@ -77,7 +85,7 @@ def run_benchmark(
         all_runs.append(Run(run=number, official=number == 1, results=results))
 
     return ResultsFile(
-        model=model if provider == "claude" else f"fake ({model} not called)",
+        model=model if provider != "fake" else f"fake ({model} not called)",
         promptVersion=PROMPT_VERSION,
         commitSha=commit_sha(),
         timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),

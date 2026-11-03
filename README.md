@@ -504,7 +504,17 @@ SESSION_SECRET=
 WEB_ORIGINS=http://localhost:5173
 ```
 
-`LLM_PROVIDER` can be set to `demo` (built-in demo assistant, the default without an API key), `claude`, or `fake` (test-only scripted fixtures).
+`LLM_PROVIDER` can be set to `demo` (built-in demo assistant, the default without an API key), `claude`, `gemini`, or `fake` (test-only scripted fixtures).
+
+**Free option: Gemini.** Get a free key at [aistudio.google.com](https://aistudio.google.com), then start the backend with:
+
+```bash
+export LLM_PROVIDER=gemini
+export GEMINI_API_KEY=...your key...
+PYTHONPATH=src .venv/bin/python -m uvicorn backend.main:get_app --factory --port 8000
+```
+
+It uses `gemini-2.5-flash` by default (override with `GEMINI_MODEL`), with the same system prompt, schema, validation, and calculations as the Claude path. Free-tier daily request limits are low, so each tester should use their own key.
 
 Actual values belong in a local `.env` file.
 

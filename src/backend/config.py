@@ -1,6 +1,8 @@
 """Tunable constants: model names, prompts, limits (AGENTS.md rule 8)."""
 
 DEFAULT_LLM_MODEL = "claude-sonnet-5-5"
+# Free-tier alternative, used with LLM_PROVIDER=gemini.
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
 PROMPT_VERSION = "2026-11-02.1"

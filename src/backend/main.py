@@ -25,6 +25,7 @@ from backend.repository import (
 from backend.manual import ManualEntryError, build_manual_expense
 from backend.config import (
     CHAT_RATE_LIMIT_PER_MINUTE,
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_LLM_MODEL,
     DEFAULT_WEB_ORIGINS,
     MAX_MESSAGE_LENGTH,
@@ -679,8 +680,17 @@ def select_llm(env):
     - "fake": TEST-ONLY fixture client. Never the default.
     - "demo": the built-in demo assistant.
     - "claude": Claude; fails at request time without a key.
+    - "gemini": Gemini (free tier); needs GEMINI_API_KEY at startup.
     """
     provider = (env.get("LLM_PROVIDER") or "").strip().lower()
+
+    if provider == "gemini":
+        from backend.llm import GeminiLlmClient
+
+        return GeminiLlmClient(
+            api_key=env.get("GEMINI_API_KEY"),
+            model=env.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
+        )
 
     if provider == "fake":
         from backend.llm import FixtureLlmClient

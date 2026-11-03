@@ -18,7 +18,7 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 }
 
-SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "SESSION_SECRET")
+SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SESSION_SECRET")
 
 
 def sanitize_message(text: str) -> str:

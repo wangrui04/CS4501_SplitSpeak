@@ -67,6 +67,13 @@ MUTANTS = [
     ("M37", "src/benchmark/runner.py", '        if turn.send == "always" or last_type == "question":', "        if True:", "if_asked turns sent even after a preview"),
     ("M38", "src/benchmark/report.py", "        ok = total and passed / total >= THRESHOLD", "        ok = total and passed / total >= 0.75", "80% run reported as PASS"),
     ("M39", "src/benchmark/report.py", '        flaky = " ⚠" if len(outcomes) > 1 else ""', '        flaky = ""', "flaky scenarios not marked"),
+    # --- Gemini provider ---
+    ("G01", B + "llm.py", '"role": "model" if m["role"] == "assistant" else "user",', '"role": "user",', "assistant turns sent as user turns"),
+    ("G02", B + "llm.py", '                        "response_json_schema": PARSED_EXPENSE_SCHEMA,\n', "", "Gemini schema not enforced"),
+    ("G03", B + "llm.py", '                if name == "ServerError" or "Timeout" in name or "Connect" in name:', "                if False:", "Gemini 5xx not retried"),
+    ("G04", B + "llm.py", '                request_messages = delimit_user_messages(messages)\n\n                if attempt and last_error is not None:\n                    request_messages.append({\n                        "role": "user",\n                        "content": (\n                            "Previous response invalid: "\n                            f"{last_error}. "\n                            "Return corrected JSON."\n                        ),\n                    })\n\n                response = self.sdk.models', '                request_messages = [dict(m) for m in messages]\n\n                response = self.sdk.models', "Gemini user text not delimited and no retry hint"),
+    ("G05", B + "security.py", 'SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SESSION_SECRET")', 'SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "SESSION_SECRET")', "Gemini key not redacted from logs"),
+    ("G06", B + "main.py", '            api_key=env.get("GEMINI_API_KEY"),', '            api_key=env.get("GEMINI_API_KEY") or "missing",', "Gemini starts without a key"),
     # --- frontend ---
     ("F01", F + "money.js", "  return Number(whole) * 100 + Number(fraction);", "  return Number(whole) * 10 + Number(fraction);", "frontend dollars->cents off"),
     ("F02", F + "money.js", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,2}))?$|^\\.(\\d{1,2})$/;", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,3}))?$|^\\.(\\d{1,3})$/;", "3 decimals accepted"),

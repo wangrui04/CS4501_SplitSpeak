@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from pathlib import Path
 
 from anthropic import transform_schema
 from pydantic import ValidationError
 
 from backend.config import (
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_LLM_MODEL,
     LLM_FALLBACK_BETA,
     LLM_MAX_ATTEMPTS,
@@ -19,6 +21,8 @@ from backend.config import (
 from backend.schemas import ParsedExpense
 
 PARSED_EXPENSE_SCHEMA = transform_schema(ParsedExpense)
+
+logger = logging.getLogger("splitwise.llm")
 
 
 class LlmError(Exception):
@@ -425,6 +429,124 @@ class ClaudeLlmClient:
                     raise LlmError(
                         "LLM_REQUEST_FAILED"
                     ) from None
+
+        raise LlmError(
+            "LLM_INVALID_OUTPUT: " + str(last_error)
+        )
+
+
+class GeminiLlmClient:
+    """Same contract as ClaudeLlmClient, backed by the Gemini API.
+
+    Uses the same system prompt, the same ParsedExpense JSON schema, and
+    the same retry-once-on-invalid-output rule. Only the provider differs.
+    """
+
+    def __init__(
+        self,
+        api_key,
+        model=DEFAULT_GEMINI_MODEL,
+        sdk=None,
+    ):
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY must be set"
+            )
+
+        self.model = model
+
+        if sdk is None:
+            from google import genai
+            from google.genai import types
+
+            sdk = genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(
+                    timeout=int(LLM_TIMEOUT_SECONDS * 1000),
+                ),
+            )
+
+        self.sdk = sdk
+
+    def parse(self, *, messages, roster, current_user):
+        system_prompt = (
+            SYSTEM_PROMPT
+            + f"\nGroup roster: {roster}."
+            + f"\nSigned-in user (ME): {current_user}."
+        )
+
+        last_error = None
+
+        for attempt in range(LLM_MAX_ATTEMPTS):
+            try:
+                request_messages = delimit_user_messages(messages)
+
+                if attempt and last_error is not None:
+                    request_messages.append({
+                        "role": "user",
+                        "content": (
+                            "Previous response invalid: "
+                            f"{last_error}. "
+                            "Return corrected JSON."
+                        ),
+                    })
+
+                response = self.sdk.models.generate_content(
+                    model=self.model,
+                    contents=[
+                        {
+                            # Gemini calls the assistant role "model".
+                            "role": "model" if m["role"] == "assistant" else "user",
+                            "parts": [{"text": m["content"]}],
+                        }
+                        for m in request_messages
+                    ],
+                    config={
+                        "system_instruction": system_prompt,
+                        "response_mime_type": "application/json",
+                        "response_json_schema": PARSED_EXPENSE_SCHEMA,
+                    },
+                )
+
+                text = getattr(response, "text", None)
+                if not text:
+                    raise LlmError(
+                        "LLM_INVALID_OUTPUT: "
+                        "missing structured JSON"
+                    )
+
+                try:
+                    data = json.loads(text)
+                except (TypeError, ValueError):
+                    raise LlmError(
+                        "LLM_INVALID_OUTPUT: response was not JSON"
+                    ) from None
+
+                parsed = ParsedExpense.model_validate(data)
+
+                return parsed.model_dump(exclude_defaults=True)
+
+            except (ValidationError, LlmError) as exc:
+                last_error = str(exc)
+
+            except (ConnectionError, TimeoutError):
+                last_error = "Temporary network failure"
+
+            except Exception as exc:
+                name = exc.__class__.__name__
+                code = getattr(exc, "code", None)
+                # 5xx and network errors are worth one retry.
+                if name == "ServerError" or "Timeout" in name or "Connect" in name:
+                    last_error = "Temporary network failure"
+                    continue
+                # Log the status code (e.g. 429 = free-tier quota used up)
+                # but never the message, which could echo request details.
+                logger.warning(
+                    "Gemini request failed: %s (HTTP %s)", name, code
+                )
+                raise LlmError(
+                    "LLM_REQUEST_FAILED"
+                ) from None
 
         raise LlmError(
             "LLM_INVALID_OUTPUT: " + str(last_error)

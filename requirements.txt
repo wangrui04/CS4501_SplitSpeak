@@ -8,3 +8,4 @@ hypothesis
 anthropic
 python-dotenv
 itsdangerous
+google-genai
