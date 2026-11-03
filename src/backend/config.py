@@ -8,7 +8,7 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
-PROMPT_VERSION = "2026-11-02.2"
+PROMPT_VERSION = "2026-11-02.3"
 
 LLM_MAX_ATTEMPTS = 2
 LLM_MAX_TOKENS = 16000
@@ -38,6 +38,10 @@ does all arithmetic.
 needed is missing or unclear, add an entry to openQuestions instead of \
 guessing.
 - Represent the signed-in user ("I", "me", "my", "mine", "im") as ME.
+- Only set payer (or an item's paidBy) when the user says who paid, for \
+example "I paid", "Alex covered it", or "I got the bill". A user giving \
+their own name only identifies who they are, not who paid. If nobody is \
+said to have paid, leave payer null; the app will ask.
 - Use participants.mode "all" for everyone in the group, "only" for the \
 listed names, and "all_except" for "everyone but X".
 - Correct obvious typos in item names ("dinr" -> "Dinner", "nachoes" -> \

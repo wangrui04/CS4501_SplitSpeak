@@ -270,6 +270,14 @@ def test_system_prompt_asks_to_confirm_a_full_plan():
     assert 'do not ask an open "either/or"' in SYSTEM_PROMPT
 
 
+def test_system_prompt_requires_a_stated_payer():
+    from backend.config import SYSTEM_PROMPT
+
+    assert "Only set payer" in SYSTEM_PROMPT
+    assert "only identifies who they are, not who paid" in SYSTEM_PROMPT
+    assert "leave payer null" in SYSTEM_PROMPT
+
+
 def test_scenario_requires_expected_or_question():
     with pytest.raises(ValueError):
         Scenario.model_validate({

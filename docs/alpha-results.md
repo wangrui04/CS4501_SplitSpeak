@@ -15,7 +15,7 @@ Fill this in **before** the session starts. Make no prompt or code changes until
 | Date and time | _YYYY-MM-DD HH:MM_ |
 | Commit SHA (`git rev-parse --short HEAD`) | _abc1234_ |
 | Model (`LLM_MODEL`) | _claude-sonnet-5-5_ |
-| Prompt version (`PROMPT_VERSION` in `src/backend/config.py`) | _2026-11-02.2_ |
+| Prompt version (`PROMPT_VERSION` in `src/backend/config.py`) | _2026-11-02.3_ |
 | `LLM_PROVIDER` | `claude` (never `fake` or `demo` for this session) |
 | Recorder | _name_ |
 
