@@ -227,6 +227,17 @@ def test_error_bodies_never_contain_key(db, monkeypatch):
     assert FAKE_KEY not in response.text
 
 
+def test_unexpected_llm_errors_never_logged_in_full(db, caplog, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
+    client = signed_in(db, llm=LeakyLlm())
+
+    with caplog.at_level(logging.WARNING):
+        client.post("/api/chat", json={"groupId": 1, "message": "dinner"})
+
+    assert "LLM parse failed: RuntimeError" in caplog.text
+    assert FAKE_KEY not in caplog.text
+
+
 def test_key_redacted_from_logs(caplog, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
     logger = logging.getLogger("splitwise.test")

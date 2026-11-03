@@ -1,4 +1,9 @@
 
+import logging
+
+from pydantic import ValidationError
+
+from backend.llm import LlmError
 from backend.schemas import ParsedExpense
 from backend.allocation import (
     allocate_items,
@@ -12,6 +17,8 @@ from backend.allocation import (
 from backend.settlement import compute_settlement
 from backend.validator import validate, question_for_error
 
+logger = logging.getLogger("splitwise.pipeline")
+
 
 def parse_turn(*, llm, conversation, roster, current_user):
     try:
@@ -22,7 +29,21 @@ def parse_turn(*, llm, conversation, roster, current_user):
         )
         parsed = ParsedExpense.model_validate(raw)
 
-    except Exception:
+    except Exception as exc:
+        # The user only sees "unresolved"; log why, for debugging.
+        # Only our own error types are safe to print in full: their
+        # messages are fixed strings plus schema validation details.
+        # Anything else could echo request data or keys.
+        detail = (
+            str(exc)[:1000]
+            if isinstance(exc, (LlmError, ValidationError))
+            else "(details hidden)"
+        )
+        logger.warning(
+            "LLM parse failed: %s: %s",
+            exc.__class__.__name__,
+            detail,
+        )
         return {
             "type": "unresolved",
             "reason": (
