@@ -9,7 +9,8 @@ import NamePicker from './components/NamePicker';
 import AddExpenseModal from './components/AddExpenseModal';
 import {
   fetchGroups,
-  fetchGroupBalances,
+  fetchGroup,
+  fetchGroupExpenses,
   fetchSession,
   login,
   logout,
@@ -20,7 +21,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [groups, setGroups] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
-  const [balances, setBalances] = useState({});
+  const [details, setDetails] = useState(null);
+  const [expenses, setExpenses] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSwitchingUser, setIsSwitchingUser] = useState(false);
@@ -96,26 +99,30 @@ export default function App() {
     };
   }, []);
 
+  // Group details carry balances relative to the signed-in user, so
+  // refetch on group change, user change, and after any saved expense.
   useEffect(() => {
     if (!selectedGroupId || !currentUser) return;
 
     let isMounted = true;
-    fetchGroupBalances(selectedGroupId)
-      .then((data) => {
+    Promise.all([fetchGroup(selectedGroupId), fetchGroupExpenses(selectedGroupId)])
+      .then(([groupDetails, groupExpenses]) => {
         if (isMounted) {
-          setBalances(data || {});
+          setDetails(groupDetails || null);
+          setExpenses(groupExpenses || []);
         }
       })
       .catch(() => {
         if (isMounted) {
-          setBalances({});
+          setDetails(null);
+          setExpenses([]);
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [selectedGroupId, currentUser]);
+  }, [selectedGroupId, currentUser, refreshKey]);
 
   const handleLogin = async (name) => {
     const session = await login(name);
@@ -134,7 +141,8 @@ export default function App() {
     setCurrentUser(null);
     setGroups([]);
     setSelectedGroupId(null);
-    setBalances({});
+    setDetails(null);
+    setExpenses([]);
     setIsSwitchingUser(false);
     setError(null);
   };
@@ -175,14 +183,13 @@ export default function App() {
             />
             <GroupView
               group={activeGroup}
-              balances={balances}
+              summary={details?.id === selectedGroupId ? details.summary : undefined}
+              expenses={details?.id === selectedGroupId ? expenses : []}
               currentUser={currentUser}
               onAddExpense={() => setIsAddExpenseOpen(true)}
             />
             <RightSidebar
-              members={activeGroup?.members}
-              balances={balances}
-              currentUser={currentUser}
+              balances={details?.id === selectedGroupId ? details.balances : []}
             />
           </div>
 
@@ -192,14 +199,7 @@ export default function App() {
               onClose={() => setIsAddExpenseOpen(false)}
               group={activeGroup}
               currentUser={currentUser}
-              onExpenseConfirmed={() => {
-                // Refresh group balances on expense save
-                if (selectedGroupId) {
-                  fetchGroupBalances(selectedGroupId)
-                    .then((data) => setBalances(data || {}))
-                    .catch(() => {});
-                }
-              }}
+              onExpenseConfirmed={() => setRefreshKey((key) => key + 1)}
             />
           )}
 

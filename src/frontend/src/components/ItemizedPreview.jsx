@@ -49,6 +49,8 @@ export default function ItemizedPreview({
     'Shared expense';
 
   const isValidated = preview.validated !== false;
+  const paidList = Array.isArray(preview.paid) ? preview.paid : [];
+  const transfers = preview.settlement?.transfers || [];
 
   const handleConfirm = async () => {
     if (!isValidated || confirming || success) return;
@@ -179,6 +181,41 @@ export default function ItemizedPreview({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Amounts paid, only when it is not a single payer */}
+      {paidList.filter((entry) => entry.cents !== 0).length > 1 && (
+        <div className="sharetotal">
+          <b id="paidTitle">Amounts paid</b>
+          <ul className="plain-list" aria-labelledby="paidTitle">
+            {paidList.map((entry) => (
+              <li key={entry.name} className="itemline">
+                <span>{entry.name}</span>
+                <b>
+                  {entry.cents < 0 ? '-' : ''}
+                  {formatCents(entry.cents)}
+                </b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Settlement: computed by the same backend function as balances */}
+      {transfers.length > 0 && (
+        <div className="sharetotal transfers">
+          <b id="transfersTitle">Who pays whom</b>
+          <ul className="plain-list" aria-labelledby="transfersTitle">
+            {transfers.map((transfer) => (
+              <li key={`${transfer.from}-${transfer.to}`} className="itemline">
+                <span>
+                  {transfer.from} pays {transfer.to}
+                </span>{' '}
+                <b>{formatCents(transfer.cents)}</b>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

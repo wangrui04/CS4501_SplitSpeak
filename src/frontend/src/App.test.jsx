@@ -30,9 +30,35 @@ const mockBalances2 = {
   Ben: 0,
 };
 
+// GET /api/groups/:id shape, built from each person's net (paid - share).
+function groupDetails(id, nets, me = 'Sarah') {
+  const myNet = nets[me] || 0;
+  const balances = Object.keys(nets)
+    .filter((name) => name !== me)
+    .map((name) => {
+      const net = nets[name];
+      let cents = 0;
+      if (myNet > 0 && net < 0) cents = -net;
+      if (myNet < 0 && net > 0) cents = -net;
+      const status = cents > 0 ? 'owes you' : cents < 0 ? 'you owe' : 'settled up';
+      return { name, cents, status };
+    });
+  return {
+    id,
+    summary: {
+      totalBalance: myNet,
+      youOwe: balances.filter((b) => b.cents < 0).reduce((sum, b) => sum - b.cents, 0),
+      youAreOwed: balances.filter((b) => b.cents > 0).reduce((sum, b) => sum + b.cents, 0),
+    },
+    balances,
+    transfers: [],
+  };
+}
+
 describe('ALPHA-15: Scaffold React Application', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(api, 'fetchGroupExpenses').mockResolvedValue([]);
   });
 
   describe('1. Loading states', () => {
@@ -49,7 +75,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('transitions from loading state to loaded content when data resolves', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       render(<App />);
 
@@ -70,7 +96,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
         .mockResolvedValueOnce(mockGroups);
 
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       render(<App />);
 
@@ -94,7 +120,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('renders header, 3-column layout, action buttons, summary cards, and group balances', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       render(<App />);
 
@@ -140,7 +166,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('renders sidebar navigation landmarks, links, and friend list', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       render(<App />);
 
@@ -168,8 +194,8 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('updates active group view, active styling, and fetches balances when selecting another group', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      const balanceSpy = vi.spyOn(api, 'fetchGroupBalances').mockImplementation((id) =>
-        Promise.resolve(id === 1 ? mockBalances1 : mockBalances2)
+      const balanceSpy = vi.spyOn(api, 'fetchGroup').mockImplementation((id) =>
+        Promise.resolve(groupDetails(id, id === 1 ? mockBalances1 : mockBalances2))
       );
 
       render(<App />);
@@ -208,7 +234,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
       vi.spyOn(api, 'fetchAvailableNames').mockResolvedValue(mockNames);
       const loginSpy = vi.spyOn(api, 'login').mockResolvedValue({ name: 'Kayla' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       render(<App />);
 
@@ -237,7 +263,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('supports sign-out, returning to name-picker screen', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
       vi.spyOn(api, 'fetchAvailableNames').mockResolvedValue(mockNames);
       const logoutSpy = vi.spyOn(api, 'logout').mockResolvedValue({ ok: true });
 
@@ -261,7 +287,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('supports switching users via modal dialog', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
       vi.spyOn(api, 'fetchAvailableNames').mockResolvedValue(mockNames);
       const loginSpy = vi.spyOn(api, 'login').mockResolvedValue({ name: 'Ben' });
 
@@ -318,7 +344,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('restores session automatically when session cookie exists', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       render(<App />);
 
@@ -334,9 +360,9 @@ describe('ALPHA-15: Scaffold React Application', () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
       const balanceSpy = vi
-        .spyOn(api, 'fetchGroupBalances')
-        .mockResolvedValueOnce({ Sarah: 0, Kayla: 0, Rui: 0 })
-        .mockResolvedValueOnce({ Sarah: 2000, Kayla: -1000, Rui: -1000 });
+        .spyOn(api, 'fetchGroup')
+        .mockResolvedValueOnce(groupDetails(1, { Sarah: 0, Kayla: 0, Rui: 0 }))
+        .mockResolvedValueOnce(groupDetails(1, { Sarah: 2000, Kayla: -1000, Rui: -1000 }));
 
       const chatSpy = vi.spyOn(api, 'sendChatMessage').mockResolvedValue({
         type: 'preview',
@@ -437,9 +463,9 @@ describe('ALPHA-15: Scaffold React Application', () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
       const balanceSpy = vi
-        .spyOn(api, 'fetchGroupBalances')
-        .mockResolvedValueOnce({ Sarah: 0, Kayla: 0, Rui: 0 })
-        .mockResolvedValueOnce({ Sarah: 2400, Kayla: -1200, Rui: -1200 });
+        .spyOn(api, 'fetchGroup')
+        .mockResolvedValueOnce(groupDetails(1, { Sarah: 0, Kayla: 0, Rui: 0 }))
+        .mockResolvedValueOnce(groupDetails(1, { Sarah: 2400, Kayla: -1200, Rui: -1200 }));
 
       const chatSpy = vi.spyOn(api, 'sendChatMessage').mockResolvedValue({
         type: 'preview',
@@ -537,7 +563,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('executes US-03 itemized multi-way split: calculates each person share from individual items and shared items', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      const balanceSpy = vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      const balanceSpy = vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       const chatSpy = vi.spyOn(api, 'sendChatMessage').mockResolvedValue({
         type: 'preview',
@@ -653,7 +679,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('executes US-04 quantities and tax/tip split: calculates quantities and distributes proportional tip', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      const balanceSpy = vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      const balanceSpy = vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       const chatSpy = vi.spyOn(api, 'sendChatMessage').mockResolvedValue({
         type: 'preview',
@@ -776,7 +802,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('executes US-05 multi-turn flow: asks follow-up question for missing prices and produces preview upon clarification', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      const balanceSpy = vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      const balanceSpy = vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       const chatSpy = vi
         .spyOn(api, 'sendChatMessage')
@@ -915,7 +941,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
     it('executes US-06 multi-turn flow: recognizes typos, asks for clarification on "split the rest", and produces preview upon clarification', async () => {
       vi.spyOn(api, 'fetchSession').mockResolvedValue({ name: 'Sarah' });
       vi.spyOn(api, 'fetchGroups').mockResolvedValue(mockGroups);
-      const balanceSpy = vi.spyOn(api, 'fetchGroupBalances').mockResolvedValue(mockBalances1);
+      const balanceSpy = vi.spyOn(api, 'fetchGroup').mockResolvedValue(groupDetails(1, mockBalances1));
 
       const chatSpy = vi
         .spyOn(api, 'sendChatMessage')

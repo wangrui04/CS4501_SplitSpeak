@@ -63,12 +63,12 @@ describe('Reusable Components', () => {
 
   it('GroupView renders group header, sum strip, and empty state', () => {
     const group = { id: 1, name: 'Apartment 4B', members: ['Sarah', 'Kayla', 'Rui'] };
-    const balances = { Sarah: 3000, Kayla: -1500, Rui: -1500 };
+    const summary = { totalBalance: 3000, youOwe: 0, youAreOwed: 3000 };
 
     render(
       <GroupView
         group={group}
-        balances={balances}
+        summary={summary}
         currentUser="Sarah"
         expenses={[]}
       />
@@ -81,20 +81,16 @@ describe('Reusable Components', () => {
   });
 
   it('RightSidebar formats balances and highlights positive and negative values', () => {
-    const members = ['Sarah', 'Kayla', 'Rui'];
-    const balances = { Sarah: 2000, Kayla: -1000, Rui: 1000 };
+    const balances = [
+      { name: 'Kayla', cents: 1000, status: 'owes you' },
+      { name: 'Rui', cents: -1000, status: 'you owe' },
+    ];
 
-    render(
-      <RightSidebar
-        members={members}
-        balances={balances}
-        currentUser="Sarah"
-      />
-    );
+    render(<RightSidebar balances={balances} />);
 
     expect(screen.getByRole('heading', { level: 3, name: 'Group balances' })).toBeInTheDocument();
-    expect(screen.getByText(/owes the group/i)).toBeInTheDocument();
-    expect(screen.getByText(/is owed/i)).toBeInTheDocument();
+    expect(screen.getByText('owes you $10.00')).toHaveClass('positive');
+    expect(screen.getByText('you owe $10.00')).toHaveClass('negative');
   });
 
   it('LoadingSpinner renders status message', () => {

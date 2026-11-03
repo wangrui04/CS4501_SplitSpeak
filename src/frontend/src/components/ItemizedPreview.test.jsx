@@ -219,3 +219,62 @@ describe('ALPHA-18: ItemizedPreview and Confirmation', () => {
     expect(onConfirmCallback).not.toHaveBeenCalled();
   });
 });
+
+describe('ALPHA-28: Settlement in the preview card', () => {
+  const tripPreview = {
+    description: 'Trip',
+    payer: 'Sarah',
+    currency: 'USD',
+    totalCents: 105000,
+    validated: true,
+    lineItems: [],
+    charges: [],
+    shares: [
+      { name: 'Sarah', cents: 44500, summary: 'Trip' },
+      { name: 'Kayla', cents: 20500, summary: 'Trip' },
+      { name: 'Rui', cents: 40000, summary: 'Trip' },
+    ],
+    paid: [
+      { name: 'Sarah', cents: 84000 },
+      { name: 'Kayla', cents: 9000 },
+      { name: 'Rui', cents: 12000 },
+    ],
+    settlement: {
+      nets: [],
+      transfers: [
+        { from: 'Rui', to: 'Sarah', cents: 28000 },
+        { from: 'Kayla', to: 'Sarah', cents: 11500 },
+      ],
+    },
+  };
+
+  it('lists who pays whom', () => {
+    render(<ItemizedPreview preview={tripPreview} conversationId={1} currentUser="Sarah" />);
+
+    const section = screen.getByRole('list', { name: 'Who pays whom' });
+    expect(section).toHaveTextContent('Rui pays Sarah $280.00');
+    expect(section).toHaveTextContent('Kayla pays Sarah $115.00');
+  });
+
+  it('shows amounts paid when more than one person paid', () => {
+    render(<ItemizedPreview preview={tripPreview} conversationId={1} currentUser="Sarah" />);
+
+    const paid = screen.getByRole('list', { name: 'Amounts paid' });
+    expect(paid).toHaveTextContent('Kayla$90.00');
+    expect(paid).toHaveTextContent('Rui$120.00');
+  });
+
+  it('hides amounts paid for a single-payer expense', () => {
+    const single = {
+      ...tripPreview,
+      paid: [
+        { name: 'Sarah', cents: 105000 },
+        { name: 'Kayla', cents: 0 },
+        { name: 'Rui', cents: 0 },
+      ],
+    };
+    render(<ItemizedPreview preview={single} conversationId={1} currentUser="Sarah" />);
+
+    expect(screen.queryByRole('list', { name: 'Amounts paid' })).not.toBeInTheDocument();
+  });
+});

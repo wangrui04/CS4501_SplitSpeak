@@ -38,7 +38,7 @@ test('AI expense: describe, preview, confirm, balances update', async ({ page })
   await preview.getByRole('button', { name: 'Confirm expense' }).click();
   await expect(page.getByRole('dialog', { name: 'Add an expense' })).toHaveCount(0);
 
-  const list = page.getByRole('list', { name: 'Expenses' });
+  const list = page.getByRole('region', { name: 'Expenses' });
   await expect(list.getByText('Dinner')).toBeVisible();
   await expect(page.locator('#owed')).toHaveText('$20.00');
 
@@ -59,7 +59,7 @@ test('manual entry saves an equal split', async ({ page }) => {
   await page.getByRole('button', { name: 'Save expense' }).click();
 
   await expect(page.getByRole('dialog', { name: 'Add an expense' })).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Expenses' }).getByText('Groceries')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Expenses' }).getByText('Groceries')).toBeVisible();
 });
 
 test('switch to manual when the AI cannot resolve the expense', async ({ page }) => {
