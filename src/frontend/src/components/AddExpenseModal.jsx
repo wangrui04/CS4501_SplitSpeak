@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { sendChatMessage } from '../api';
 import ItemizedPreview from './ItemizedPreview';
+import ManualEntryForm from './ManualEntryForm';
 
 const MAX_PROMPTS = 5;
-
-function formatCents(cents) {
-  if (cents === null || cents === undefined) return '$0.00';
-  return `$${(Math.abs(cents) / 100).toFixed(2)}`;
-}
 
 export default function AddExpenseModal({
   isOpen,
@@ -28,17 +24,9 @@ export default function AddExpenseModal({
   const [preview, setPreview] = useState(null);
   const [lastUserMessage, setLastUserMessage] = useState('');
 
-  // Manual entry state
-  const [manualDesc, setManualDesc] = useState('');
-  const [manualAmount, setManualAmount] = useState('');
-  const [manualPayer, setManualPayer] = useState(
-    currentUser && group?.members?.includes(currentUser)
-      ? currentUser
-      : group?.members?.[0] || ''
-  );
-  const [manualParticipants, setManualParticipants] = useState(group?.members || []);
-  const [manualError, setManualError] = useState(null);
-  const [manualSuccess, setManualSuccess] = useState(false);
+  // Manual entry: only the description is ever prefilled from the chat.
+  const [manualPrefill, setManualPrefill] = useState('');
+  const [manualFormKey, setManualFormKey] = useState(0);
 
   const chatBottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -154,47 +142,14 @@ export default function AddExpenseModal({
     }
   };
 
-  const toggleParticipant = (member) => {
-    setManualParticipants((prev) =>
-      prev.includes(member) ? prev.filter((m) => m !== member) : [...prev, member]
-    );
-  };
+  const firstUserMessage = messages.find((msg) => msg.role === 'user')?.content || '';
+  const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant');
+  const isStuck = lastAssistant && ['unresolved', 'error'].includes(lastAssistant.type);
 
-  const handleManualSave = (e) => {
-    e.preventDefault();
-    setManualError(null);
-
-    const desc = manualDesc.trim();
-    const amountVal = parseFloat(manualAmount);
-
-    if (!desc) {
-      setManualError('Please provide a description.');
-      return;
-    }
-    if (isNaN(amountVal) || amountVal <= 0) {
-      setManualError('Please provide a valid positive amount.');
-      return;
-    }
-    if (manualParticipants.length === 0) {
-      setManualError('Please select at least one participant.');
-      return;
-    }
-
-    const cents = Math.round(amountVal * 100);
-    const manualExpense = {
-      description: desc,
-      payer: manualPayer,
-      amount_cents: cents,
-      participants: manualParticipants,
-    };
-
-    setManualSuccess(true);
-    if (onExpenseConfirmed) {
-      onExpenseConfirmed(manualExpense);
-    }
-    setTimeout(() => {
-      onClose();
-    }, 400);
+  const switchToManual = (prefill = '') => {
+    setManualPrefill(prefill);
+    setManualFormKey((key) => key + 1);
+    setActiveTab('manual');
   };
 
   return (
@@ -321,49 +276,6 @@ export default function AddExpenseModal({
                   >
                     <div className="bubble-content">{msg.content}</div>
 
-                    {/* Preview rendered in bubble if present */}
-                    {msg.type === 'preview' && msg.preview && (
-                      <div className="bubble-preview">
-                        <div className="preview-header">
-                          <strong>{msg.preview.payer}</strong> paid{' '}
-                          <strong>{formatCents(msg.preview.total_cents)}</strong>
-                        </div>
-                        {msg.preview.items && (
-                          <div className="preview-items-list">
-                            {msg.preview.items.map((it, idx) => (
-                              <div key={idx} className="preview-item-row">
-                                <span>{it.description}</span>
-                                <span>{formatCents(it.amount_cents)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {msg.preview.shares && (
-                          <div className="preview-shares-list">
-                            <span className="shares-title">Each person&apos;s share:</span>
-                            {Object.entries(msg.preview.shares).map(([name, cents]) => (
-                              <div key={name} className="preview-share-row">
-                                <span>{name}</span>
-                                <b>{formatCents(cents)}</b>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Fallback button if unresolved */}
-                    {msg.fallback && (
-                      <div className="fallback-action">
-                        <button
-                          type="button"
-                          className="primary btn-switch-manual"
-                          onClick={() => setActiveTab('manual')}
-                        >
-                          Switch to manual entry
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ))
               )}
@@ -405,6 +317,20 @@ export default function AddExpenseModal({
               />
             )}
 
+            {/* Unresolved / LLM error escape hatch */}
+            {isStuck && !loading && (
+              <div className="fallback-banner" role="alert">
+                <span>I couldn&apos;t work this out. Switch to manual entry?</span>
+                <button
+                  type="button"
+                  className="primary btn-switch-manual"
+                  onClick={() => switchToManual(firstUserMessage)}
+                >
+                  Switch to manual entry
+                </button>
+              </div>
+            )}
+
             {/* Error Banner */}
             {error && (
               <div className="chat-error" role="alert">
@@ -431,7 +357,7 @@ export default function AddExpenseModal({
                 <button
                   type="button"
                   className="primary btn-switch-manual"
-                  onClick={() => setActiveTab('manual')}
+                  onClick={() => switchToManual(firstUserMessage)}
                 >
                   Enter expense manually
                 </button>
@@ -466,104 +392,32 @@ export default function AddExpenseModal({
                 Send ➜
               </button>
             </div>
+
+            <button
+              type="button"
+              className="link-button manual-link"
+              onClick={() => switchToManual('')}
+            >
+              Enter manually instead
+            </button>
           </div>
         )}
 
         {/* Manual Entry Tab Content */}
         {activeTab === 'manual' && (
-          <form className="modalbody" id="manual" onSubmit={handleManualSave}>
-            <p className="subtle" style={{ marginTop: 0 }}>
-              Add an expense the traditional way.
-            </p>
-
-            {manualError && (
-              <div className="chat-error" role="alert">
-                <span className="error-icon" aria-hidden="true">⚠</span>
-                <span>{manualError}</span>
-              </div>
-            )}
-            {manualSuccess && (
-              <div className="manual-success" role="status">
-                ✓ Expense saved successfully!
-              </div>
-            )}
-
-            <label className="minilabel" htmlFor="desc">
-              Description
-            </label>
-            <input
-              className="field"
-              id="desc"
-              placeholder="e.g. Dinner"
-              value={manualDesc}
-              onChange={(e) => setManualDesc(e.target.value)}
-            />
-
-            <div className="minirow">
-              <div style={{ flex: 1 }}>
-                <label className="minilabel" htmlFor="amount">
-                  Amount ($)
-                </label>
-                <input
-                  className="field"
-                  id="amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={manualAmount}
-                  onChange={(e) => setManualAmount(e.target.value)}
-                />
-              </div>
-
-              <div style={{ flex: 1 }}>
-                <label className="minilabel" htmlFor="payer">
-                  Paid by
-                </label>
-                <select
-                  className="field"
-                  id="payer"
-                  value={manualPayer}
-                  onChange={(e) => setManualPayer(e.target.value)}
-                >
-                  {(group?.members || []).map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <label className="minilabel">Split equally between</label>
-            <div id="manualMembers" className="minirow checkbox-group">
-              {(group?.members || []).map((m) => (
-                <label key={m} className="member-checkbox">
-                  <input
-                    type="checkbox"
-                    value={m}
-                    checked={manualParticipants.includes(m)}
-                    onChange={() => toggleParticipant(m)}
-                  />{' '}
-                  {m}
-                </label>
-              ))}
-            </div>
-
-            <div className="manualbuttons">
-              <button
-                type="button"
-                className="secondary"
-                id="cancelManual"
-                onClick={onClose}
-              >
-                Cancel
-              </button>
-              <button type="submit" className="primary" id="saveManual">
-                Save expense
-              </button>
-            </div>
-          </form>
+          <ManualEntryForm
+            key={manualFormKey}
+            group={group}
+            currentUser={currentUser}
+            initialDescription={manualPrefill}
+            onCancel={onClose}
+            onSaved={() => {
+              if (onExpenseConfirmed) {
+                onExpenseConfirmed({ source: 'manual' });
+              }
+              onClose();
+            }}
+          />
         )}
       </div>
     </div>

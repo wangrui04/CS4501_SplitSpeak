@@ -273,7 +273,8 @@ describe('ALPHA-17: AddExpenseModal with AI Chat', () => {
     });
   });
 
-  it('supports manual expense form submission with validation', async () => {
+  it('saves a manual expense through the API and closes the modal', async () => {
+    const saveSpy = vi.spyOn(api, 'createManualExpense').mockResolvedValue({ ok: true, expenseId: 4 });
     const onConfirmSpy = vi.fn();
     const onCloseSpy = vi.fn();
 
@@ -287,27 +288,115 @@ describe('ALPHA-17: AddExpenseModal with AI Chat', () => {
       />
     );
 
-    // Switch to manual tab
     fireEvent.click(screen.getByRole('tab', { name: /manual entry/i }));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Coffee & Donuts' } });
+    fireEvent.change(screen.getByLabelText('Amount ($)'), { target: { value: '15.50' } });
+    fireEvent.click(screen.getByRole('button', { name: /save expense/i }));
 
-    const descInput = screen.getByLabelText(/description/i);
-    const amountInput = screen.getByLabelText(/amount/i);
-    const saveBtn = screen.getByRole('button', { name: /save expense/i });
-
-    // Submit empty fails
-    fireEvent.click(saveBtn);
-    expect(screen.getByText(/please provide a description/i)).toBeInTheDocument();
-
-    // Fill valid data
-    fireEvent.change(descInput, { target: { value: 'Coffee & Donuts' } });
-    fireEvent.change(amountInput, { target: { value: '15.50' } });
-    fireEvent.click(saveBtn);
-
-    expect(onConfirmSpy).toHaveBeenCalledWith({
+    await waitFor(() => expect(onCloseSpy).toHaveBeenCalled());
+    expect(onConfirmSpy).toHaveBeenCalled();
+    expect(saveSpy).toHaveBeenCalledWith(1, {
       description: 'Coffee & Donuts',
-      payer: 'Sarah',
-      amount_cents: 1550,
-      participants: ['Sarah', 'Kayla', 'Rui'],
+      amount: '15.50',
+      paidBy: 'Sarah',
+      splitBetween: ['Sarah', 'Kayla', 'Rui'],
     });
+  });
+});
+
+describe('ALPHA-30: Switch-to-manual escape hatch', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  function renderModal() {
+    render(
+      <AddExpenseModal isOpen={true} onClose={vi.fn()} group={mockGroup} currentUser="Sarah" />
+    );
+  }
+
+  async function send(text) {
+    fireEvent.change(screen.getByLabelText('Describe your expense'), { target: { value: text } });
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+  }
+
+  it('shows a banner on an unresolved response and prefills only the description', async () => {
+    vi.spyOn(api, 'sendChatMessage')
+      .mockResolvedValueOnce({ type: 'question', question: 'Who paid?', conversationId: 7, promptCount: 1 })
+      .mockResolvedValueOnce({
+        type: 'unresolved',
+        reason: 'Unable to parse a valid structured expense',
+        conversationId: 7,
+        promptCount: 2,
+        fallback: 'manual',
+      });
+    renderModal();
+
+    await send('nachos 16 for me and kayla');
+    await screen.findByText('Who paid?');
+    await send('dunno, someone');
+
+    expect(await screen.findByText("I couldn't work this out. Switch to manual entry?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to manual entry' }));
+
+    expect(screen.getByRole('tab', { name: /manual entry/i })).toHaveAttribute('aria-selected', 'true');
+    // Prefilled from the first message, not the latest one.
+    expect(screen.getByLabelText('Description')).toHaveValue('nachos 16 for me and kayla');
+    // Never prefill amounts from unvalidated AI output.
+    expect(screen.getByLabelText('Amount ($)')).toHaveValue('');
+  });
+
+  it('shows the banner on an LLM error response', async () => {
+    vi.spyOn(api, 'sendChatMessage').mockResolvedValue({
+      type: 'error',
+      message: 'Unexpected error processing expense.',
+      conversationId: 8,
+      promptCount: 1,
+    });
+    renderModal();
+
+    await send('dinner');
+
+    expect(await screen.findByText("I couldn't work this out. Switch to manual entry?")).toBeInTheDocument();
+  });
+
+  it('always offers an "Enter manually instead" link in the AI tab', () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enter manually instead' }));
+
+    expect(screen.getByRole('tab', { name: /manual entry/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Description')).toHaveValue('');
+  });
+
+  it('shows Retry and the manual link after a network error', async () => {
+    vi.spyOn(api, 'sendChatMessage').mockRejectedValue(new Error('Failed to fetch'));
+    renderModal();
+
+    await send('dinner');
+
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enter manually instead' })).toBeInTheDocument();
+  });
+
+  it('keeps the AI transcript when switching tabs', async () => {
+    vi.spyOn(api, 'sendChatMessage').mockResolvedValue({
+      type: 'question',
+      question: 'How much were the nachos?',
+      conversationId: 9,
+      promptCount: 1,
+    });
+    renderModal();
+
+    await send('nachos with kayla');
+    await screen.findByText('How much were the nachos?');
+
+    fireEvent.click(screen.getByRole('tab', { name: /manual entry/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /ai assistant/i }));
+
+    expect(screen.getByText('nachos with kayla')).toBeInTheDocument();
+    expect(screen.getByText('How much were the nachos?')).toBeInTheDocument();
+    expect(screen.getByLabelText(/prompt count: 1 of 5/i)).toBeInTheDocument();
   });
 });

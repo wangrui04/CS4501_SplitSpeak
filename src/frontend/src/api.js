@@ -82,3 +82,15 @@ export async function confirmExpense(conversationId) {
   });
 }
 
+
+export async function fetchGroupExpenses(id) {
+  return request(`/api/groups/${id}/expenses`);
+}
+
+// amount is sent as the typed string so the server parses exact cents.
+export async function createManualExpense(groupId, { description, amount, paidBy, splitBetween }) {
+  return request(`/api/groups/${groupId}/expenses/manual`, {
+    method: 'POST',
+    body: JSON.stringify({ description, amount, paidBy, splitBetween }),
+  });
+}

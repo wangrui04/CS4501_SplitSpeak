@@ -1214,3 +1214,65 @@ aside.left {
     font-size: 11px;
   }
 }
+
+/* Expense list (ALPHA-29) */
+.expense-list,
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+h2.month {
+  margin: 0;
+  font-size: 12px;
+}
+
+.owes.lent b {
+  color: var(--green);
+}
+
+.owes.borrowed b {
+  color: var(--orange);
+}
+
+.owes.settled {
+  color: #999;
+}
+
+.balanceentry b.settled {
+  color: #999;
+}
+
+/* Manual entry validation (ALPHA-27) */
+.field-error {
+  display: block;
+  color: #d9534f;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Switch-to-manual escape hatch (ALPHA-30) */
+.fallback-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #f3c7b5;
+  border-radius: 6px;
+  background: #fff4ef;
+  font-size: 13px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 6px 0 0;
+  color: var(--teal);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
