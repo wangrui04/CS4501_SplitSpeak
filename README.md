@@ -1,4 +1,4 @@
-# Splitwise AI — Conversational Expense Assistant
+# SplitSpeak AI — Conversational Expense Assistant
 
 **CS 4501: Software Engineering Final Project**
 
