@@ -1,0 +1,42 @@
+{
+  "id": "MESSY-6",
+  "label": "Heavy typos",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "i paid 30 for dinnr w kayla n riu, splt evnly",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {},
+  "categories": [
+    "participants"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 1000,
+      "Kayla": 1000,
+      "Rui": 1000
+    },
+    "paid": {
+      "Sarah": 3000,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 1000
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1000
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}

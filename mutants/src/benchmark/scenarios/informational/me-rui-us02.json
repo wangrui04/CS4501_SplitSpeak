@@ -1,0 +1,39 @@
+{
+  "id": "ME-RUI-US02",
+  "label": "US-02 signed in as Rui",
+  "signedInAs": "Rui",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I paid $24 for groceries, but only Kayla and Rui are sharing them.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustNotAsk": true
+  },
+  "categories": [
+    "participants"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 0,
+      "Kayla": 1200,
+      "Rui": 1200
+    },
+    "paid": {
+      "Sarah": 0,
+      "Kayla": 0,
+      "Rui": 2400
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Rui",
+        "cents": 1200
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}

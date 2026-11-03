@@ -1,0 +1,49 @@
+{
+  "id": "B2",
+  "label": "Moderate",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "dinner was me rui and kayla. im sarah. ruis meal was 18 mine was 24 and kaylas was 30. everyone pays for their own food",
+      "send": "always"
+    },
+    {
+      "text": "i paid. tax was $6 and tip was 14.40. split both proportionally based on what we ordered",
+      "send": "if_asked"
+    }
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 3080,
+      "Kayla": 3850,
+      "Rui": 2310
+    },
+    "paid": {
+      "Sarah": 9240,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 3850
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 2310
+      }
+    ],
+    "expectedPrompts": 2
+  },
+  "informational": false,
+  "behavior": {
+    "mustAskBeforeFinalPreview": true
+  },
+  "categories": [
+    "tax/tip",
+    "amounts"
+  ]
+}

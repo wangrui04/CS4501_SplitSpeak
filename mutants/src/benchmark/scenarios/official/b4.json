@@ -1,0 +1,50 @@
+{
+  "id": "B4",
+  "label": "Advanced",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "trip was me rui and kayla. i paid 840 for the house, rui paid 120 groceries for everyone and kayla paid 90 for transportation just for me and her. me and rui stayed 3 nights kayla only stayed 1. split it fairly",
+      "send": "always"
+    },
+    {
+      "text": "yes to all of that. groceries equal even tho kayla stayed less. those are the final totals",
+      "send": "if_asked"
+    }
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 44500,
+      "Kayla": 20500,
+      "Rui": 40000
+    },
+    "paid": {
+      "Sarah": 84000,
+      "Kayla": 9000,
+      "Rui": 12000
+    },
+    "settlement": [
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 28000
+      },
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 11500
+      }
+    ],
+    "expectedPrompts": 2
+  },
+  "informational": false,
+  "behavior": {
+    "mustAskBeforeFinalPreview": true
+  },
+  "categories": [
+    "weights/nights",
+    "multiple payers",
+    "settlement"
+  ]
+}

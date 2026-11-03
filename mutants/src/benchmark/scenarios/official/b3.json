@@ -1,0 +1,50 @@
+{
+  "id": "B3",
+  "label": "Intermediate",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "rui and i split nachos and rui and kayla shared a pizza. everyone but kayla got a marg. i paid can u split it",
+      "send": "always"
+    },
+    {
+      "text": "nachos 18 pizza 36 and margs 12 each. yes equal for the shared food and one marg each. tax 9 tip 18 split those proportionally",
+      "send": "if_asked"
+    }
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 2827,
+      "Kayla": 2423,
+      "Rui": 5250
+    },
+    "paid": {
+      "Sarah": 10500,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 5250
+      },
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 2423
+      }
+    ],
+    "expectedPrompts": 2
+  },
+  "informational": false,
+  "behavior": {
+    "mustAskBeforeFinalPreview": true
+  },
+  "categories": [
+    "participants",
+    "quantities",
+    "tax/tip"
+  ]
+}

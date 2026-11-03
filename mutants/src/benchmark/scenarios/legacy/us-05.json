@@ -1,0 +1,49 @@
+{
+  "id": "US-05",
+  "label": "Missing information",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "Me and Kayla shared nachoes, Rui got two drinks, and I paid.",
+      "send": "always"
+    },
+    {
+      "text": "Nachos were $16 and drinks were $5 each. No tax or tip.",
+      "send": "if_asked"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustAskBeforeFinalPreview": true
+  },
+  "categories": [
+    "amounts",
+    "quantities"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 800,
+      "Kayla": 800,
+      "Rui": 1000
+    },
+    "paid": {
+      "Sarah": 2600,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1000
+      },
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 800
+      }
+    ],
+    "expectedPrompts": 2
+  }
+}

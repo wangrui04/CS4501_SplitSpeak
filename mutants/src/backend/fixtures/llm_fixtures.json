@@ -1,0 +1,941 @@
+{
+  "_comment": "TEST-ONLY scripted LLM outputs keyed by exact user message. Used when LLM_PROVIDER=fake.",
+  "responses": {
+    "I paid $30 for dinner for Sarah, Kayla, and Rui. Split it equally.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "30.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "30.00",
+      "openQuestions": []
+    },
+    "I paid $24 for groceries, but only Kayla and Rui are sharing them.": {
+      "description": "Groceries",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Groceries",
+          "quantity": 1,
+          "unitPrice": "24.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla",
+              "Rui"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "24.00",
+      "openQuestions": []
+    },
+    "I paid $42. Kayla and I shared $12 nachos. Rui had a $15 burger, and Kayla had a $15 pasta.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": "12.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Burger",
+          "quantity": 1,
+          "unitPrice": "15.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        },
+        {
+          "name": "Pasta",
+          "quantity": 1,
+          "unitPrice": "15.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "42.00",
+      "openQuestions": []
+    },
+    "I paid for dinner. Kayla got two $10 drinks, Rui got one $10 drink, and I didn't have anything. The tip was $6. Split the tip proportionally.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Drinks",
+          "quantity": 2,
+          "unitPrice": "10.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Drink",
+          "quantity": 1,
+          "unitPrice": "10.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        }
+      ],
+      "charges": [
+        {
+          "kind": "tip",
+          "amount": "6.00",
+          "percent": null,
+          "method": "proportional"
+        }
+      ],
+      "statedTotal": "36.00",
+      "openQuestions": []
+    },
+    "Me and Kayla shared nachoes, Rui got two drinks, and I paid.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": null,
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Drinks",
+          "quantity": 2,
+          "unitPrice": null,
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "items.unitPrice",
+          "question": "How much were the nachos and each drink?"
+        }
+      ]
+    },
+    "Nachos were $16 and drinks were $5 each. No tax or tip.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": "16.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Drinks",
+          "quantity": 2,
+          "unitPrice": "5.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "26.00",
+      "openQuestions": []
+    },
+    "I paid for dinr. Me and Kayla shared nachoes for $16. Riu got 2 drnks for $5 each. Split the rest evenly.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": "16.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Drinks",
+          "quantity": 2,
+          "unitPrice": "5.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "charges",
+          "question": "I understand that you and Kayla shared $16 nachos, and Rui had two $5 drinks. When you say 'split the rest evenly,' is there another charge to split?"
+        }
+      ]
+    },
+    "No, that's everything. No tax or tip.": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": "16.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Drinks",
+          "quantity": 2,
+          "unitPrice": "5.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "26.00",
+      "openQuestions": []
+    },
+    "kayla n i split pizza 24": {
+      "description": "Pizza",
+      "payer": null,
+      "items": [
+        {
+          "name": "Pizza",
+          "quantity": 1,
+          "unitPrice": "24.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla",
+              "ME"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": []
+    },
+    "ipaid30fordinnerforsarahkaylaandrui.splititequally": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "30.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "30.00",
+      "openQuestions": []
+    },
+    "i paid 30 for dinner, split evenly but rui had double": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "30.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "participants",
+          "question": "You said split evenly, but also that Rui had double. Should Rui pay twice as much as everyone else, or should it be an even split?"
+        }
+      ]
+    },
+    "Allie and I split a $20 pizza. I paid.": {
+      "description": "Pizza",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Pizza",
+          "quantity": 1,
+          "unitPrice": "20.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Allie",
+              "ME"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": []
+    },
+    "I PAID $45 FOR TACOS FOR EVERYONE SPLIT EVEN": {
+      "description": "Tacos",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Tacos",
+          "quantity": 1,
+          "unitPrice": "45.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "45.00",
+      "openQuestions": []
+    },
+    "i paid 30 for dinnr w kayla n riu, splt evnly": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "30.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "30.00",
+      "openQuestions": []
+    },
+    "Kayla and I shared $16 nachos and I paid.": {
+      "description": "Nachos",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": "16.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla",
+              "ME"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": []
+    },
+    "sarah rui and kayla got dinner and it was 96 total w tax and tip. i paid the whole thing im sarah. split evenly pls": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "96.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": "96.00",
+      "openQuestions": []
+    },
+    "dinner was me rui and kayla. im sarah. ruis meal was 18 mine was 24 and kaylas was 30. everyone pays for their own food": {
+      "description": "Dinner",
+      "payer": null,
+      "items": [
+        {
+          "name": "Rui meal",
+          "quantity": 1,
+          "unitPrice": "18.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        },
+        {
+          "name": "Sarah meal",
+          "quantity": 1,
+          "unitPrice": "24.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME"
+            ]
+          }
+        },
+        {
+          "name": "Kayla meal",
+          "quantity": 1,
+          "unitPrice": "30.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "payer",
+          "question": "Who paid, and was there any tax or tip? If so, how should it be split?"
+        }
+      ]
+    },
+    "i paid. tax was $6 and tip was 14.40. split both proportionally based on what we ordered": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Rui meal",
+          "quantity": 1,
+          "unitPrice": "18.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui"
+            ]
+          }
+        },
+        {
+          "name": "Sarah meal",
+          "quantity": 1,
+          "unitPrice": "24.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME"
+            ]
+          }
+        },
+        {
+          "name": "Kayla meal",
+          "quantity": 1,
+          "unitPrice": "30.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Kayla"
+            ]
+          }
+        }
+      ],
+      "charges": [
+        {
+          "kind": "tax",
+          "amount": "6.00",
+          "percent": null,
+          "method": "proportional"
+        },
+        {
+          "kind": "tip",
+          "amount": "14.40",
+          "percent": null,
+          "method": "proportional"
+        }
+      ],
+      "statedTotal": null,
+      "openQuestions": []
+    },
+    "rui and i split nachos and rui and kayla shared a pizza. everyone but kayla got a marg. i paid can u split it": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": null,
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Rui"
+            ]
+          }
+        },
+        {
+          "name": "Pizza",
+          "quantity": 1,
+          "unitPrice": null,
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Margarita",
+          "quantity": 2,
+          "unitPrice": null,
+          "participants": {
+            "mode": "all_except",
+            "names": [
+              "Kayla"
+            ]
+          }
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "items.unitPrice",
+          "question": "How much were the nachos, the pizza, and each margarita? Should shared food be split equally, and was there tax or tip?"
+        }
+      ]
+    },
+    "nachos 18 pizza 36 and margs 12 each. yes equal for the shared food and one marg each. tax 9 tip 18 split those proportionally": {
+      "description": "Dinner",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Nachos",
+          "quantity": 1,
+          "unitPrice": "18.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Rui"
+            ]
+          }
+        },
+        {
+          "name": "Pizza",
+          "quantity": 1,
+          "unitPrice": "36.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "Rui",
+              "Kayla"
+            ]
+          }
+        },
+        {
+          "name": "Margarita",
+          "quantity": 2,
+          "unitPrice": "12.00",
+          "participants": {
+            "mode": "all_except",
+            "names": [
+              "Kayla"
+            ]
+          }
+        }
+      ],
+      "charges": [
+        {
+          "kind": "tax",
+          "amount": "9.00",
+          "percent": null,
+          "method": "proportional"
+        },
+        {
+          "kind": "tip",
+          "amount": "18.00",
+          "percent": null,
+          "method": "proportional"
+        }
+      ],
+      "statedTotal": null,
+      "openQuestions": []
+    },
+    "trip was me rui and kayla. i paid 840 for the house, rui paid 120 groceries for everyone and kayla paid 90 for transportation just for me and her. me and rui stayed 3 nights kayla only stayed 1. split it fairly": {
+      "description": "Trip",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "House",
+          "quantity": 1,
+          "unitPrice": "840.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 3
+            },
+            {
+              "name": "Rui",
+              "weight": 3
+            },
+            {
+              "name": "Kayla",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "Groceries",
+          "quantity": 1,
+          "unitPrice": "120.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "paidBy": "Rui"
+        },
+        {
+          "name": "Transportation",
+          "quantity": 1,
+          "unitPrice": "90.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          },
+          "paidBy": "Kayla"
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "weights",
+          "question": "To split it fairly: should the house be split by nights (3 / 3 / 1), groceries split equally, and transportation split between you and Kayla? Are these the final totals?"
+        }
+      ]
+    },
+    "yes to all of that. groceries equal even tho kayla stayed less. those are the final totals": {
+      "description": "Trip",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "House",
+          "quantity": 1,
+          "unitPrice": "840.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 3
+            },
+            {
+              "name": "Rui",
+              "weight": 3
+            },
+            {
+              "name": "Kayla",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "Groceries",
+          "quantity": 1,
+          "unitPrice": "120.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "paidBy": "Rui"
+        },
+        {
+          "name": "Transportation",
+          "quantity": 1,
+          "unitPrice": "90.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Kayla"
+            ]
+          },
+          "paidBy": "Kayla"
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": []
+    },
+    "im sarah. trip w rui and kayla. i paid 600 lodging. me and rui stayed 3 nights kayla stayed 2. split lodging per person per night. rui paid dinner 120 split equal between all 3. kayla paid 60 taxi everyone except rui split equal. all amounts final no extra tax or fees": {
+      "description": "Trip",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Lodging",
+          "quantity": 1,
+          "unitPrice": "600.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 3
+            },
+            {
+              "name": "Rui",
+              "weight": 3
+            },
+            {
+              "name": "Kayla",
+              "weight": 2
+            }
+          ]
+        },
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "120.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "paidBy": "Rui"
+        },
+        {
+          "name": "Taxi",
+          "quantity": 1,
+          "unitPrice": "60.00",
+          "participants": {
+            "mode": "all_except",
+            "names": [
+              "Rui"
+            ]
+          },
+          "paidBy": "Kayla"
+        }
+      ],
+      "charges": [],
+      "statedTotal": "780.00",
+      "openQuestions": []
+    },
+    "wait kayla didnt eat dinner actually. rui said shed cover twice as much dinner as me. also i got a 100 refund on the lodging": {
+      "description": "Trip",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Lodging",
+          "quantity": 1,
+          "unitPrice": "600.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 3
+            },
+            {
+              "name": "Rui",
+              "weight": 3
+            },
+            {
+              "name": "Kayla",
+              "weight": 2
+            }
+          ]
+        },
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "120.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Rui"
+            ]
+          },
+          "paidBy": "Rui",
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 1
+            },
+            {
+              "name": "Rui",
+              "weight": 2
+            }
+          ]
+        },
+        {
+          "name": "Taxi",
+          "quantity": 1,
+          "unitPrice": "60.00",
+          "participants": {
+            "mode": "all_except",
+            "names": [
+              "Rui"
+            ]
+          },
+          "paidBy": "Kayla"
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": [
+        {
+          "field": "refund",
+          "question": "Should the lodging still be split by nights (3 / 3 / 2) after the $100 refund, and did the refund go to you?"
+        }
+      ]
+    },
+    "yes same proportions and the refund went back to me": {
+      "description": "Trip",
+      "payer": "ME",
+      "items": [
+        {
+          "name": "Lodging",
+          "quantity": 1,
+          "unitPrice": "600.00",
+          "participants": {
+            "mode": "all",
+            "names": []
+          },
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 3
+            },
+            {
+              "name": "Rui",
+              "weight": 3
+            },
+            {
+              "name": "Kayla",
+              "weight": 2
+            }
+          ],
+          "refund": {
+            "amount": "100.00",
+            "recipient": "ME"
+          }
+        },
+        {
+          "name": "Dinner",
+          "quantity": 1,
+          "unitPrice": "120.00",
+          "participants": {
+            "mode": "only",
+            "names": [
+              "ME",
+              "Rui"
+            ]
+          },
+          "paidBy": "Rui",
+          "weights": [
+            {
+              "name": "ME",
+              "weight": 1
+            },
+            {
+              "name": "Rui",
+              "weight": 2
+            }
+          ]
+        },
+        {
+          "name": "Taxi",
+          "quantity": 1,
+          "unitPrice": "60.00",
+          "participants": {
+            "mode": "all_except",
+            "names": [
+              "Rui"
+            ]
+          },
+          "paidBy": "Kayla"
+        }
+      ],
+      "charges": [],
+      "statedTotal": null,
+      "openQuestions": []
+    }
+  }
+}
