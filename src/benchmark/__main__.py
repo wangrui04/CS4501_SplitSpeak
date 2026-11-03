@@ -14,7 +14,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from backend.config import DEFAULT_GEMINI_MODEL, DEFAULT_LLM_MODEL
+from backend.config import DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL, DEFAULT_LLM_MODEL
 from benchmark.benchmark import (
     BenchmarkRefused,
     latest_results,
@@ -33,7 +33,7 @@ def main(argv=None) -> int:
     run.add_argument("--runs", type=int, default=3)
     run.add_argument("--model", help="defaults to the provider's default model")
     run.add_argument(
-        "--provider", choices=["claude", "gemini", "fake"], default="claude",
+        "--provider", choices=["claude", "gemini", "groq", "fake"], default="claude",
         help="fake uses the scripted test fixtures and calls no API",
     )
     run.add_argument("--include-informational", action="store_true")
@@ -48,9 +48,10 @@ def main(argv=None) -> int:
         try:
             results = run_benchmark(
                 runs=args.runs,
-                model=args.model or (
-                    DEFAULT_GEMINI_MODEL if args.provider == "gemini" else DEFAULT_LLM_MODEL
-                ),
+                model=args.model or {
+                    "gemini": DEFAULT_GEMINI_MODEL,
+                    "groq": DEFAULT_GROQ_MODEL,
+                }.get(args.provider, DEFAULT_LLM_MODEL),
                 provider=args.provider,
                 include_informational=args.include_informational,
             )

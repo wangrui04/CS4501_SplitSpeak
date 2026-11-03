@@ -11,6 +11,8 @@ from pydantic import ValidationError
 
 from backend.config import (
     DEFAULT_GEMINI_MODEL,
+    DEFAULT_GROQ_MODEL,
+    GROQ_BASE_URL,
     DEFAULT_LLM_MODEL,
     LLM_FALLBACK_BETA,
     LLM_MAX_ATTEMPTS,
@@ -550,6 +552,144 @@ class GeminiLlmClient:
                         "Set GEMINI_MODEL to a model your key can use.",
                         self.model,
                     )
+                raise LlmError(
+                    "LLM_REQUEST_FAILED"
+                ) from None
+
+        raise LlmError(
+            "LLM_INVALID_OUTPUT: " + str(last_error)
+        )
+
+
+class GroqLlmClient:
+    """Same contract as ClaudeLlmClient, backed by Groq's
+    OpenAI-compatible chat completions API (plain HTTP via httpx).
+
+    Uses the same system prompt, the same ParsedExpense JSON schema, and
+    the same retry-once-on-invalid-output rule. Only the provider differs.
+    """
+
+    def __init__(
+        self,
+        api_key,
+        model=DEFAULT_GROQ_MODEL,
+        base_url=GROQ_BASE_URL,
+        http=None,
+    ):
+        if not api_key:
+            raise ValueError(
+                "GROQ_API_KEY must be set"
+            )
+
+        self.model = model
+        self.url = base_url.rstrip("/") + "/chat/completions"
+        self._headers = {"Authorization": f"Bearer {api_key}"}
+
+        if http is None:
+            import httpx
+
+            http = httpx.Client(timeout=LLM_TIMEOUT_SECONDS)
+
+        self.http = http
+
+    def parse(self, *, messages, roster, current_user):
+        system_prompt = (
+            SYSTEM_PROMPT
+            + f"\nGroup roster: {roster}."
+            + f"\nSigned-in user (ME): {current_user}."
+        )
+
+        last_error = None
+
+        for attempt in range(LLM_MAX_ATTEMPTS):
+            try:
+                request_messages = delimit_user_messages(messages)
+
+                if attempt and last_error is not None:
+                    request_messages.append({
+                        "role": "user",
+                        "content": (
+                            "Previous response invalid: "
+                            f"{last_error}. "
+                            "Return corrected JSON."
+                        ),
+                    })
+
+                response = self.http.post(
+                    self.url,
+                    headers=self._headers,
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            *request_messages,
+                        ],
+                        # Non-strict: strict mode would reject the
+                        # schema's optional fields. Output is validated
+                        # below either way.
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "parsed_expense",
+                                "schema": PARSED_EXPENSE_SCHEMA,
+                                "strict": False,
+                            },
+                        },
+                    },
+                )
+
+                status = response.status_code
+                if status >= 500:
+                    last_error = "Temporary network failure"
+                    continue
+                if status != 200:
+                    # Log the status code (e.g. 429 = free-tier limit)
+                    # but never the body, which could echo request data.
+                    logger.warning("Groq request failed: HTTP %s", status)
+                    if status == 404:
+                        logger.warning(
+                            "Groq model %r was not found. Set GROQ_MODEL "
+                            "to a model your key can use.",
+                            self.model,
+                        )
+                    raise LlmError("LLM_REQUEST_FAILED")
+
+                try:
+                    text = response.json()["choices"][0]["message"]["content"]
+                except (KeyError, IndexError, TypeError, ValueError):
+                    text = None
+
+                if not text:
+                    raise LlmError(
+                        "LLM_INVALID_OUTPUT: "
+                        "missing structured JSON"
+                    )
+
+                try:
+                    data = json.loads(text)
+                except (TypeError, ValueError):
+                    raise LlmError(
+                        "LLM_INVALID_OUTPUT: response was not JSON"
+                    ) from None
+
+                parsed = ParsedExpense.model_validate(data)
+
+                return parsed.model_dump(exclude_defaults=True)
+
+            except ValidationError as exc:
+                last_error = str(exc)
+
+            except LlmError as exc:
+                if str(exc) == "LLM_REQUEST_FAILED":
+                    raise
+                last_error = str(exc)
+
+            except Exception as exc:
+                name = exc.__class__.__name__
+                if "Timeout" in name or "Connect" in name or "Network" in name:
+                    last_error = "Temporary network failure"
+                    continue
+                logger.warning("Groq request failed: %s", name)
                 raise LlmError(
                     "LLM_REQUEST_FAILED"
                 ) from None

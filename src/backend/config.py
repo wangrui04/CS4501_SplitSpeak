@@ -3,6 +3,9 @@
 DEFAULT_LLM_MODEL = "claude-sonnet-5-5"
 # Free-tier alternative, used with LLM_PROVIDER=gemini.
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+# Free-tier alternative, used with LLM_PROVIDER=groq (OpenAI-compatible API).
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
 PROMPT_VERSION = "2026-11-02.2"

@@ -504,7 +504,7 @@ SESSION_SECRET=
 WEB_ORIGINS=http://localhost:5173
 ```
 
-`LLM_PROVIDER` can be set to `demo` (built-in demo assistant, the default without an API key), `claude`, `gemini`, or `fake` (test-only scripted fixtures).
+`LLM_PROVIDER` can be set to `demo` (built-in demo assistant, the default without an API key), `claude`, `gemini`, `groq`, or `fake` (test-only scripted fixtures).
 
 **Free option: Gemini.** Get a free key at [aistudio.google.com](https://aistudio.google.com), then start the backend with:
 
@@ -515,6 +515,8 @@ PYTHONPATH=src .venv/bin/python -m uvicorn backend.main:get_app --factory --port
 ```
 
 It uses `gemini-2.5-flash` by default (override with `GEMINI_MODEL`), with the same system prompt, schema, validation, and calculations as the Claude path. Free-tier daily request limits are low, so each tester should use their own key.
+
+**Free option: Groq.** Get a free key at [console.groq.com](https://console.groq.com) (no credit card), then start the backend with `LLM_PROVIDER=groq` and `GROQ_API_KEY=...`. It uses `openai/gpt-oss-120b` by default (override with `GROQ_MODEL`) through Groq's OpenAI-compatible API, with the same prompt, schema, validation, and calculations.
 
 Actual values belong in a local `.env` file.
 

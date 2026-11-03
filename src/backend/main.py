@@ -26,6 +26,7 @@ from backend.manual import ManualEntryError, build_manual_expense
 from backend.config import (
     CHAT_RATE_LIMIT_PER_MINUTE,
     DEFAULT_GEMINI_MODEL,
+    DEFAULT_GROQ_MODEL,
     DEFAULT_LLM_MODEL,
     DEFAULT_WEB_ORIGINS,
     MAX_MESSAGE_LENGTH,
@@ -681,8 +682,17 @@ def select_llm(env):
     - "demo": the built-in demo assistant.
     - "claude": Claude; fails at request time without a key.
     - "gemini": Gemini (free tier); needs GEMINI_API_KEY at startup.
+    - "groq": Groq (free tier); needs GROQ_API_KEY at startup.
     """
     provider = (env.get("LLM_PROVIDER") or "").strip().lower()
+
+    if provider == "groq":
+        from backend.llm import GroqLlmClient
+
+        return GroqLlmClient(
+            api_key=env.get("GROQ_API_KEY"),
+            model=env.get("GROQ_MODEL") or DEFAULT_GROQ_MODEL,
+        )
 
     if provider == "gemini":
         from backend.llm import GeminiLlmClient

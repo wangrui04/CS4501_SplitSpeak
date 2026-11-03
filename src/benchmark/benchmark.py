@@ -16,7 +16,11 @@ class BenchmarkRefused(RuntimeError):
     pass
 
 
-API_KEYS = {"claude": "ANTHROPIC_API_KEY", "gemini": "GEMINI_API_KEY"}
+API_KEYS = {
+    "claude": "ANTHROPIC_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "groq": "GROQ_API_KEY",
+}
 
 
 def check_allowed(provider: str, env) -> None:
@@ -33,6 +37,11 @@ def make_llm(provider: str, model: str, env):
         from backend.llm import FixtureLlmClient
 
         return FixtureLlmClient()
+
+    if provider == "groq":
+        from backend.llm import GroqLlmClient
+
+        return GroqLlmClient(api_key=env["GROQ_API_KEY"], model=model)
 
     if provider == "gemini":
         from backend.llm import GeminiLlmClient

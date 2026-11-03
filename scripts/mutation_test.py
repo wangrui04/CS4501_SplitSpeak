@@ -74,6 +74,13 @@ MUTANTS = [
     ("G04", B + "llm.py", '                request_messages = delimit_user_messages(messages)\n\n                if attempt and last_error is not None:\n                    request_messages.append({\n                        "role": "user",\n                        "content": (\n                            "Previous response invalid: "\n                            f"{last_error}. "\n                            "Return corrected JSON."\n                        ),\n                    })\n\n                response = self.sdk.models', '                request_messages = [dict(m) for m in messages]\n\n                response = self.sdk.models', "Gemini user text not delimited and no retry hint"),
     ("G05", B + "security.py", 'SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SESSION_SECRET")', 'SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "SESSION_SECRET")', "Gemini key not redacted from logs"),
     ("G06", B + "main.py", '            api_key=env.get("GEMINI_API_KEY"),', '            api_key=env.get("GEMINI_API_KEY") or "missing",', "Gemini starts without a key"),
+    # --- Groq provider ---
+    ("Q01", B + "llm.py", '                                "schema": PARSED_EXPENSE_SCHEMA,\n', "", "Groq schema not sent"),
+    ("Q02", B + "llm.py", '                            {"role": "system", "content": system_prompt},\n', "", "Groq system prompt not sent"),
+    ("Q03", B + "llm.py", "                if status >= 500:", "                if status >= 600:", "Groq 5xx not retried"),
+    ("Q04", B + "llm.py", '                if str(exc) == "LLM_REQUEST_FAILED":\n                    raise\n', "", "Groq 429 retried instead of stopping"),
+    ("Q05", B + "llm.py", '        self._headers = {"Authorization": f"Bearer {api_key}"}', '        self._headers = {}', "Groq key not sent"),
+    ("Q06", B + "security.py", '    "GROQ_API_KEY",\n', "", "Groq key not redacted from logs"),
     # --- frontend ---
     ("F01", F + "money.js", "  return Number(whole) * 100 + Number(fraction);", "  return Number(whole) * 10 + Number(fraction);", "frontend dollars->cents off"),
     ("F02", F + "money.js", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,2}))?$|^\\.(\\d{1,2})$/;", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,3}))?$|^\\.(\\d{1,3})$/;", "3 decimals accepted"),
