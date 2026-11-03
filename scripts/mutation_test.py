@@ -81,6 +81,11 @@ MUTANTS = [
     ("Q04", B + "llm.py", '                if str(exc) == "LLM_REQUEST_FAILED":\n                    raise\n', "", "Groq 429 retried instead of stopping"),
     ("Q05", B + "llm.py", '        self._headers = {"Authorization": f"Bearer {api_key}"}', '        self._headers = {}', "Groq key not sent"),
     ("Q06", B + "security.py", '    "GROQ_API_KEY",\n', "", "Groq key not redacted from logs"),
+    # --- multi-payer trip: inferred main payer ---
+    ("T01", B + "pipeline.py", '    if not items or data["charges"]:', "    if not items:", "tax/tip allowed without a known payer"),
+    ("T02", B + "pipeline.py", '    if any(not item.get("paidBy") or item["unitPrice"] is None for item in items):', '    if any(item["unitPrice"] is None for item in items):', "payer inferred when an item has no payer"),
+    ("T03", B + "pipeline.py", "key=lambda name: (-totals[name], order.get(name, len(order)))", "key=lambda name: (totals[name], order.get(name, len(order)))", "main payer is whoever paid the least"),
+    ("T04", B + "pipeline.py", '            name = current_user if item["paidBy"] == "ME" else item["paidBy"]', '            name = item["paidBy"]', "ME not resolved when inferring payer"),
     # --- frontend ---
     ("F01", F + "money.js", "  return Number(whole) * 100 + Number(fraction);", "  return Number(whole) * 10 + Number(fraction);", "frontend dollars->cents off"),
     ("F02", F + "money.js", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,2}))?$|^\\.(\\d{1,2})$/;", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,3}))?$|^\\.(\\d{1,3})$/;", "3 decimals accepted"),

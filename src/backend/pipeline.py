@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from backend.llm import LlmError
 from backend.schemas import ParsedExpense
 from backend.allocation import (
+    parse_money_to_cents,
     allocate_items,
     allocate_charges,
     resolve_participants,
@@ -18,6 +19,32 @@ from backend.settlement import compute_settlement
 from backend.validator import validate, question_for_error
 
 logger = logging.getLogger("splitwise.pipeline")
+
+
+def _infer_trip_payer(data, roster, current_user):
+    """Main payer for a multi-payer trip, or None if it must be asked.
+
+    When every item names who paid and there is no tax, tip, or fee
+    (those are charged to the main payer), the main payer is whoever
+    paid the most, with ties broken by roster order.
+    """
+    items = data["items"]
+    if not items or data["charges"]:
+        return None
+    if any(not item.get("paidBy") or item["unitPrice"] is None for item in items):
+        return None
+
+    totals = {}
+    try:
+        for item in items:
+            name = current_user if item["paidBy"] == "ME" else item["paidBy"]
+            cents = parse_money_to_cents(item["unitPrice"]) * item["quantity"]
+            totals[name] = totals.get(name, 0) + cents
+    except ValueError:
+        return None
+
+    order = {name: index for index, name in enumerate(roster)}
+    return min(totals, key=lambda name: (-totals[name], order.get(name, len(order))))
 
 
 def parse_turn(*, llm, conversation, roster, current_user):
@@ -64,6 +91,9 @@ def parse_turn(*, llm, conversation, roster, current_user):
         if data["payer"] == "ME"
         else data["payer"]
     )
+
+    if payer is None:
+        payer = _infer_trip_payer(data, roster, current_user)
 
     data["payer"] = payer
 
