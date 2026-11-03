@@ -1,3 +1,4 @@
+
 const BASE_URL = '';
 
 async function request(path, options = {}) {
@@ -12,16 +13,20 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let errorDetail = `Request failed with status ${response.status}`;
+
     try {
       const data = await response.json();
+
       if (data && data.detail) {
         errorDetail = data.detail;
       }
     } catch {
-      // Non-JSON response
+      // Non-JSON response.
     }
+
     const error = new Error(errorDetail);
     error.status = response.status;
+
     throw error;
   }
 
@@ -61,7 +66,11 @@ export async function fetchGroupBalances(id) {
   return request(`/api/groups/${id}/balances`);
 }
 
-export async function sendChatMessage({ groupId, conversationId, message }) {
+export async function sendChatMessage({
+  groupId,
+  conversationId,
+  message,
+}) {
   return request('/api/chat', {
     method: 'POST',
     body: JSON.stringify({
@@ -77,20 +86,56 @@ export async function fetchConversation(conversationId) {
 }
 
 export async function confirmExpense(conversationId) {
-  return request(`/api/conversations/${conversationId}/confirm`, {
-    method: 'POST',
-  });
+  return request(
+    `/api/conversations/${conversationId}/confirm`,
+    {
+      method: 'POST',
+    },
+  );
 }
-
 
 export async function fetchGroupExpenses(id) {
   return request(`/api/groups/${id}/expenses`);
 }
 
-// amount is sent as the typed string so the server parses exact cents.
-export async function createManualExpense(groupId, { description, amount, paidBy, splitBetween }) {
+// Send the amount as a string for exact parsing.
+export async function createManualExpense(
+  groupId,
+  {
+    description,
+    amount,
+    paidBy,
+    splitBetween,
+  },
+) {
   return request(`/api/groups/${groupId}/expenses/manual`, {
     method: 'POST',
-    body: JSON.stringify({ description, amount, paidBy, splitBetween }),
+    body: JSON.stringify({
+      description,
+      amount,
+      paidBy,
+      splitBetween,
+    }),
+  });
+}
+
+// Create a new group with optional members.
+export async function createGroup(name, members = []) {
+  return request('/api/groups', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      members,
+    }),
+  });
+}
+
+// Add a person to an existing group.
+export async function addGroupMember(groupId, name) {
+  return request(`/api/groups/${groupId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+    }),
   });
 }

@@ -130,4 +130,4 @@ def test_markdown_snapshot():
         run(3, {"B5": (False, 5, "prompt limit: no final preview within 5 prompts", "prompt limit")}),
     ))
 
-    assert markdown == SNAPSHOT.read_text()
+    assert markdown == SNAPSHOT.read_text(encoding="utf-8")
