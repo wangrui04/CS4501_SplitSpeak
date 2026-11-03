@@ -132,8 +132,11 @@ Areas covered: dollars-to-cents conversion, leftover-cent rounding, "everyone ex
 | --- | --- | --- |
 | #2, #3 | _open_ | _documentation and professor confirmation; owned by the team_ |
 | #4–#24 | _close if done, or defer with a reason_ | |
-| #25–#32, #34–#36 | Implemented on `feature/alpha-25-37` | |
-| #33 | Pending: needs the human session | |
+| #25–#30, #34, #35 | Done on `feature/alpha-25-37` | |
+| #31 Benchmark runner | Done | Built and tested; verified offline with scripted fixtures. Live automated runs were blocked by the Groq free-tier rate limit (HTTP 429). |
+| #32 Benchmark report | Done | Built and tested (snapshot test). Not generated from a live run, because live runs were blocked by the free-tier rate limit. |
+| #36 Playwright E2E | Pending first CI run | Specs and CI job written; they run once the branch is pushed. |
+| #33 | Session done (14 / 15), decision pending team review | |
 | #37 | Pending: needs PDFs and Canvas submission | |
 | #38 Corrections after a preview | _decide_ | Backend handles corrections (B5); no dedicated UI |
 | #39 Itemized manual entry | Deferred | Optional; equal-split manual entry covers US-07 |

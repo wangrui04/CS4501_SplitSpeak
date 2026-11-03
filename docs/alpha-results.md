@@ -116,14 +116,9 @@ Run 1 above is official. Optionally repeat the session for Run 2 and Run 3 to ch
 
 ## 7. Supporting evidence: automated benchmark (ALPHA-32)
 
-Run the automated benchmark at the same frozen commit and attach the report:
+**Not available.** The automated benchmark could not complete on Groq's free tier. It was run once at the frozen commit with `--provider groq --runs 3`, but the runner sends prompts back to back, and from Run 1's B3 onward every request was rejected by Groq's rate limit (HTTP 429) before reaching the model. Only Run 1's B1 and B2 reached the model, and both passed. Because rate-limited attempts would be misreported as failures, that results file was discarded and is not used as evidence.
 
-```bash
-PYTHONPATH=src python3 -m benchmark run --runs 3 --model claude-sonnet-5-5
-PYTHONPATH=src python3 -m benchmark report
-```
-
-_Paste the report here, or link the `src/benchmark/results/<timestamp>.md` file._
+The runner and report themselves are built and tested (`src/tests/test_benchmark_runner.py`, `src/tests/test_benchmark_report.py`), and an offline run with scripted fixtures (`--provider fake`) reproduces every answer key. A live automated report needs a paid tier, or a pause between prompts (a possible future option for the runner).
 
 Note: a single automated run of 5 scenarios passes 90% only at 5/5, because 4/5 is 80%. The human session above is the official result.
 
