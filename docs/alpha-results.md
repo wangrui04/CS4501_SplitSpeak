@@ -12,12 +12,12 @@ Fill this in **before** the session starts. Make no prompt or code changes until
 
 | Setting | Value |
 | --- | --- |
-| Date and time | _YYYY-MM-DD HH:MM_ |
-| Commit SHA (`git rev-parse --short HEAD`) | _abc1234_ |
-| Model (`LLM_MODEL`) | _claude-sonnet-5-5_ |
-| Prompt version (`PROMPT_VERSION` in `src/backend/config.py`) | _2026-11-02.3_ |
-| `LLM_PROVIDER` | `claude` (never `fake` or `demo` for this session) |
-| Recorder | _name_ |
+| Date | 2026-11-02 |
+| Commit SHA (`git rev-parse --short HEAD`) | `ce169ce` |
+| Model | `openai/gpt-oss-120b` (via Groq) |
+| Prompt version (`PROMPT_VERSION` in `src/backend/config.py`) | `2026-11-02.3` |
+| `LLM_PROVIDER` | `groq` (never `fake` or `demo` for this session) |
+| Recorder | Kayla Kim |
 
 ---
 
@@ -41,23 +41,23 @@ Fill this in **before** the session starts. Make no prompt or code changes until
 
 | # | Tester | Scenario | Conversation ID | Prompts | Shares match | Paid match | Settlement match | Pass | Notes |
 | ---: | --- | --- | ---: | ---: | :---: | :---: | :---: | :---: | --- |
-| 1 | | B1 Basic | | | | | | | |
-| 2 | | B2 Moderate | | | | | | | |
-| 3 | | B3 Intermediate | | | | | | | |
-| 4 | | B4 Advanced | | | | | | | |
-| 5 | | B5 Most complex | | | | | | | |
-| 6 | | B1 Basic | | | | | | | |
-| 7 | | B2 Moderate | | | | | | | |
-| 8 | | B3 Intermediate | | | | | | | |
-| 9 | | B4 Advanced | | | | | | | |
-| 10 | | B5 Most complex | | | | | | | |
-| 11 | | B1 Basic | | | | | | | |
-| 12 | | B2 Moderate | | | | | | | |
-| 13 | | B3 Intermediate | | | | | | | |
-| 14 | | B4 Advanced | | | | | | | |
-| 15 | | B5 Most complex | | | | | | | |
+| 1 | Kayla Kim | B1 Basic | n/r | 1 | Y | Y | Y | ✅ | No question asked. |
+| 2 | Kayla Kim | B2 Moderate | n/r | 2 | Y | Y | Y | ✅ | Asked only who paid; scripted reply also gave tax and tip. |
+| 3 | Kayla Kim | B3 Intermediate | n/r | 2 | Y | Y | Y | ✅ | Asked only for the nachos price. |
+| 4 | Kayla Kim | B4 Advanced | n/r | 2 | Y | Y | Y | ✅ | Restated full plan (house by nights, groceries equal, transportation Sarah + Kayla) and asked to confirm. |
+| 5 | Kayla Kim | B5 Most complex | n/r | 2 | Y | Y | Y | ✅ | Redo: the first attempt was invalid (tester sent turn 3 without a question). Previews after turn 1 and after the correction; never asked a question (behavior check not met). |
+| 6 | Kayla Kim | B1 Basic | | 1 | Y | Y | Y | ✅ | No question asked. |
+| 7 | Kayla Kim | B2 Moderate | | 2 | Y | Y | Y | ✅ | Redo: the first attempt was invalid (turn 2 sent with a stray trailing "'"; it had run out of script). Redo asked "Who paid?", then the verbatim turn 2 produced the correct split. |
+| 8 | Kayla Kim | B3 Intermediate | | 2 | Y | Y | Y | ✅ | Asked only for the nachos price. |
+| 9 | Kayla Kim | B4 Advanced | | 2 | Y | Y | Y | ✅ | Asked an either/or question about groceries (equal or by nights) despite the confirm-the-plan rule; the scripted reply still produced the correct split. |
+| 10 | Kayla Kim | B5 Most complex | | 2 | Y | Y | Y | ✅ | Preview after turn 1, then a correct preview after the correction; turn 3 correctly not sent. Never asked a question (behavior check not met). |
+| 11 | Kayla Kim | B1 Basic | | 1 | Y | Y | Y | ✅ | No question asked. |
+| 12 | Kayla Kim | B2 Moderate | | 1 | N | N | N | ❌ | Previewed after turn 1 without asking who paid; no tax or tip (shares $24 / $30 / $18). The model read "everyone pays for their own food" as each person paying for their own meal, and the app's trip rule (main payer = whoever paid most) then set Kayla as payer instead of asking. Category: multiple payers. |
+| 13 | Kayla Kim | B3 Intermediate | | 2 | Y | Y | Y | ✅ | Asked only for the nachos price. |
+| 14 | Kayla Kim | B4 Advanced | | 1 | Y | Y | Y | ✅ | Previewed after turn 1 without confirming what "fairly" meant (behavior check not met). Its own choice (house by nights, groceries equal, transportation Sarah + Kayla) matched the key. |
+| 15 | Kayla Kim | B5 Most complex | | 2 | Y | Y | Y | ✅ | Preview after turn 1, then a correct preview after the correction; turn 3 correctly not sent. Never asked a question (behavior check not met). |
 
-The conversation ID is the `conversationId` field in each `/api/chat` response. To find it, open the browser dev tools, go to **Network**, and select the last `chat` request. With the ID, anyone can fetch the full transcript later from `GET /api/conversations/<id>`.
+n/r = not recorded: the backend keeps conversations in memory and was restarted after Run 1, so those IDs were lost. For later attempts, the conversation ID is the `conversationId` field in each `/api/chat` response. To find it, open the browser dev tools, go to **Network**, and select the last `chat` request. With the ID, anyone can fetch the full transcript later from `GET /api/conversations/<id>`.
 
 ---
 
@@ -67,12 +67,14 @@ Report per scenario, so one scenario failing for all three testers reads as one 
 
 | Scenario | Passed (of 3) | Failure category | Root cause |
 | --- | ---: | --- | --- |
-| B1 Basic | | | |
-| B2 Moderate | | | |
-| B3 Intermediate | | | |
-| B4 Advanced | | | |
-| B5 Most complex | | | |
-| **Total** | **_/15** | | |
+| B1 Basic | 3 | — | — |
+| B2 Moderate | 2 | multiple payers | Run 3: the model read "everyone pays for their own food" as each person paying for their own meal. The app's multi-payer trip rule (commit `2e411f2`) then picked the largest payer instead of asking "Who paid?", so no follow-up was possible and tax and tip were never added. In Run 2's (invalid) first attempt the same misreading appeared after turn 2. |
+| B3 Intermediate | 3 | — | — |
+| B4 Advanced | 3 | — | In Run 3 the model did not confirm "fairly" before previewing; it guessed the same rules as the key. |
+| B5 Most complex | 3 | — | The model never asked a question in any run; corrections and the refund were applied correctly each time. |
+| **Total** | **14 / 15** | | |
+
+Invalid attempts (not counted, redone): Run 1 B5 (turn 3 sent without a question) and Run 2 B2 (turn 2 sent with a stray trailing apostrophe). Both are documented in [alpha-session-notes.md](alpha-session-notes.md).
 
 Failure categories: participants, quantities, amounts, tax/tip, multiple payers, weights/nights, refund, correction, settlement, prompt limit.
 
@@ -80,17 +82,21 @@ Failure categories: participants, quantities, amounts, tax/tip, multiple payers,
 
 ## 5. Decision (Activity 1)
 
-**Result:** _N_ / 15 attempts passed (_N_%). The target is ≥ 14 / 15 (≥ 90%).
+**Result:** 14 / 15 attempts passed (93.3%). The target is ≥ 14 / 15 (≥ 90%).
 
-**Decision:** _Validated_ / _Invalidated: pivot_
+**Decision (draft for team review):** Validated, at the threshold, with caveats.
 
-_One or two paragraphs that support the decision with the numbers above._
+The assistant produced a split matching the answer key exactly (every cost share, amount paid, and settlement transfer) within 5 prompts in 14 of 15 attempts, meeting the 14 / 15 threshold with no margin. B1, B3, B4, and B5 passed in all three runs; the only failure was B2 in Run 3. That failure was a payer misreading ("everyone pays for their own food" taken as each person paying for their own meal), and an app rule for multi-payer trips then hid it instead of asking who paid. It is a specific, fixable root cause rather than a general weakness in extraction or calculation.
+
+The result should be read with the limitations in §8. The margin is zero, all 15 attempts were run by one tester instead of three, and the model's clarifying-question behavior was inconsistent: B5 never asked a question, Run 3's B4 guessed what "fairly" meant, and B2 misread who paid in two of four attempts (including the invalid one). Next steps: fix the B2 root cause (below) and rerun the full session with three testers under the new version.
 
 If the hypothesis was not validated:
 
-- **Root cause:** _which scenarios failed and why_
-- **Fix plan:** _what changes (prompt, schema, engine) and which issue tracks it_
-- **Retest plan:** _which scenarios are rerun, by whom, and when; bump `PROMPT_VERSION` if the prompt changes_
+Although the threshold was met, the B2 failure has a clear fix:
+
+- **Root cause:** B2 Run 3, multiple payers: the model's misreading plus the app's trip-payer rule (see §4).
+- **Fix plan:** when every item was paid only by the person who shares it (so nobody owes anyone), treat it as a likely misreading and ask "Who paid?" instead of picking a main payer. This is an app change in `src/backend/pipeline.py`, with tests written first.
+- **Retest plan:** rerun all 5 scenarios with 3 testers under the new commit, recording the new commit SHA (and bumping `PROMPT_VERSION` only if the prompt changes).
 
 ---
 
@@ -125,6 +131,7 @@ Note: a single automated run of 5 scenarios passes 90% only at 5/5, because 4/5 
 
 ## 8. Limitations
 
+- **One tester instead of three.** All 15 attempts were run by one team member (three runs of the five scenarios), not by three testers as planned. Results from a single person's runs are even more correlated.
 - **Correlated testers.** Three testers paste identical scripts, so their attempts are not independent. A scenario the model gets wrong will usually fail for all three. That is why results are also reported per scenario.
 - **Same team wrote the benchmark and the product.** The scenarios and answer keys were written by the people who built the assistant, which risks tuning to the test. External testers are planned for a later stage.
 - **Scripted, not natural, input.** Follow-ups are scripted, so the session does not measure how real users phrase corrections.
