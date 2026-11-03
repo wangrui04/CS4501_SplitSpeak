@@ -122,20 +122,14 @@ def test_alpha_testing_scope():
         docs,
     )
 
-    # Six test scenarios
-    assert re.search(
-        r"(?:scenarios:\s*6|6\s+scenarios)",
-        docs,
-    )
+    # Five benchmark scenarios (revised from six; issue #33)
+    assert re.search(r"scenarios:\s*5\b", docs)
 
-    # Eighteen total attempts
-    assert re.search(
-        r"(?:total test attempts:\s*18|18\s+attempts)",
-        docs,
-    )
+    # Fifteen total attempts
+    assert re.search(r"total test attempts:\s*15\b", docs)
 
-    # At least 17 of 18 attempts must pass
-    assert "17 out of 18" in docs or "17/18" in docs
+    # At least 14 of 15 attempts must pass
+    assert "14 out of 15" in docs
 
 
 def test_hypothesis_is_documented():

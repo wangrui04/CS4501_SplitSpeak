@@ -44,31 +44,23 @@ The project is currently in **Alpha Development**.
 
 ### Implemented and Tested
 
-- React and Vite frontend project initialization
-- FastAPI application and API endpoints
-- SQLite database initialization and sample group data
-- Expense allocation using integer cents
-- Equal and itemized expense calculations
-- Input validation and error handling
-- Expense storage and retrieval
-- Conversation record operations
-- Name-based demo sessions and protected endpoints
-- Signed session cookies
-- Mock LLM implementation for deterministic testing
-- Claude structured-output integration module
-- Natural-language expense processing pipeline
-- Automated tests for backend and LLM behavior
-- GitHub Actions CI configuration
+- React frontend: name-picker sign-in, group page with summary bar, month-grouped expense list, and balances panel
+- AI assistant tab with prompt counter, itemized preview (shares, amounts paid, who pays whom), and confirm
+- Manual-entry form backed by the same allocation engine and validator as the AI path
+- Switch-to-manual escape hatch when the AI cannot resolve an expense
+- FastAPI backend with SQLite, signed name-based sessions, and protected endpoints
+- Integer-cents allocation: equal, itemized, quantities, weighted splits (nights, "twice as much"), per-item payers, refunds, and pooled tax/tip
+- Net-position settlement ("simplified debts") for group balances and previews
+- Claude structured-output client (`output_config.format`), with user text delimited as data
+- Rate limiting, input sanitizing, CORS restriction, security headers, and secret redaction in logs
+- Benchmark runner and report for scenarios B1–B5 (`python -m benchmark`)
+- Playwright end-to-end smoke tests (run headless in CI)
 
 ### In Progress / Planned
 
-- Full React user interface
-- Connecting React components to FastAPI endpoints
-- Interactive AI expense-entry interface
-- Expense preview and confirmation workflow in the frontend
-- Group balance and expense history displays
-- End-to-end testing with the live Claude API
-- Alpha testing and collection of validation results
+- Alpha test session with 3 testers × 5 benchmark scenarios ([docs/alpha-results.md](docs/alpha-results.md))
+- Live-LLM benchmark runs (Run 1/2/3) and report
+- Settle up and conversational corrections UI (optional issues #38–#40)
 
 **Note:** Passing automated tests verifies the tested implementation. It does not yet establish the accuracy of the complete application with real users or live AI responses.
 
@@ -148,7 +140,11 @@ CS4501_Splitwise/
 ├── docs/
 │   ├── AlphaTesting.md
 │   ├── UserStories.md
-│   └── alpha-validation-decision.md
+│   ├── alpha-validation-decision.md
+│   ├── alpha-results.md
+│   ├── alpha-submission.md
+│   ├── api.md
+│   └── benchmarks.md
 │
 ├── src/
 │   ├── benchmark_local.db
@@ -160,12 +156,22 @@ CS4501_Splitwise/
 │   │   ├── validator.py
 │   │   ├── database.py
 │   │   ├── repository.py
+│   │   ├── config.py        # model, prompt, limits
 │   │   ├── llm.py
-│   │   └── pipeline.py
+│   │   ├── pipeline.py
+│   │   ├── settlement.py    # net settlement
+│   │   ├── manual.py        # manual-entry builder
+│   │   ├── security.py      # rate limit, sanitizing, headers
+│   │   └── fixtures/        # test-only LLM fixtures
+│   │
+│   ├── benchmark/           # python -m benchmark
+│   │   ├── scenarios/       # official, legacy, informational
+│   │   └── results/
 │   │
 │   ├── frontend/
 │   │   ├── package.json
-│   │   ├── index.html
+│   │   ├── playwright.config.js
+│   │   ├── e2e/
 │   │   └── src/
 │   │
 │   ├── demo/
@@ -191,7 +197,7 @@ CS4501_Splitwise/
 
 The original HTML prototype is preserved in `src/demo/` as a reference for frontend development.
 
-The React interface is being developed separately in `src/frontend/`.
+The React interface lives in `src/frontend/`.
 
 ---
 
@@ -313,23 +319,25 @@ Our core hypothesis is:
 | Metric | Target |
 |---|---|
 | Testers | 3 development team members |
-| Scenarios | 6 |
-| Attempts per tester | 6 |
-| Total attempts | 18 |
-| Required successful attempts | 17 |
+| Scenarios | 5 benchmark scenarios (B1 Basic … B5 Most complex) |
+| Total attempts | 15 (3 testers × 5 scenarios) |
+| Required successful attempts | 14 |
 | Accuracy target | At least 90% |
 | Prompt limit | 5 user prompts |
 
-An attempt is considered successful only when the assistant correctly identifies the payer, items, participants, individual shares, and total within five user prompts.
+An attempt passes only when every person's cost share, every person's amount paid, and every settlement transfer match the answer key to the cent, within five user prompts.
 
-### Six Testing Scenarios
+### Benchmark Scenarios
 
-1. Equal expense splitting
-2. Splitting among selected members
-3. Itemized expenses with different participants
-4. Unequal quantities with tax/tip allocation
-5. Missing or ambiguous information
-6. Typos and unclear natural-language instructions
+The prompts and answer keys are in [docs/benchmarks.md](docs/benchmarks.md). Testers copy and paste the prompts, because the typos are part of the test.
+
+1. **B1 Basic:** equal dinner split
+2. **B2 Moderate:** everyone pays for their own meal, proportional tax and tip
+3. **B3 Intermediate:** shared items, exclusions, quantities, proportional tax and tip
+4. **B4 Advanced:** trip with three payers and a per-night house split
+5. **B5 Most complex:** trip with per-night lodging, an unprompted correction, and a refund
+
+The original six user-story scenarios (US-01…US-06) are kept as informational benchmark cases.
 
 The Alpha testing plan uses internal team members to evaluate initial functionality.
 
@@ -359,23 +367,35 @@ The code is improved for readability, structure, and maintainability while keepi
 
 ### Running Tests
 
-From the repository root:
+From the repository root (use `py` on Windows):
 
 ```bash
-py -m pytest src/tests/ -v --tb=short
-```
-
-For macOS/Linux, use the appropriate Python command, such as:
-
-```bash
+# Backend unit and integration tests (no paid API calls)
 python3 -m pytest src/tests/ -v --tb=short
+
+# Frontend unit tests
+npm --prefix src/frontend test
+
+# End-to-end smoke tests (first run: npx playwright install chromium)
+npm --prefix src/frontend run test:e2e
 ```
 
-To run an individual test module:
+The E2E tests start their own backend with `LLM_PROVIDER=fake`, which returns scripted responses from `src/backend/fixtures/llm_fixtures.json`. That setting is **test-only** and never the default.
+
+### Running the Benchmark
 
 ```bash
-py -m pytest src/tests/test_backend.py -v
+# Live run against Claude (needs ANTHROPIC_API_KEY; refuses to run in CI)
+PYTHONPATH=src python3 -m benchmark run --runs 3 --model claude-sonnet-5-5
+
+# Offline smoke run with the scripted fixtures (no API calls)
+PYTHONPATH=src python3 -m benchmark run --provider fake --runs 1
+
+# Markdown report for the latest results file
+PYTHONPATH=src python3 -m benchmark report
 ```
+
+Results are written to `src/benchmark/results/<timestamp>.json`. Add `--include-informational` to also run the US-01…US-06, messy-phrasing, and first-person cases. Those are excluded from pass rates.
 
 ### Test Organization
 
@@ -383,19 +403,23 @@ py -m pytest src/tests/test_backend.py -v
 |---|---|
 | `test_setup.py` | Project structure, dependencies, configuration, and documentation |
 | `test_expense.py` | Expense models, allocation, rounding, and edge cases |
+| `test_trip_allocation.py` | Weighted splits, per-item payers, refunds, pooled tax/tip |
+| `test_settlement.py` | Net settlement (benchmark keys as vectors) and group balances API |
 | `test_validator.py` | Validation of expense data and allocations |
 | `test_backend.py` | Database, persistence, groups, sessions, and API endpoints |
+| `test_manual_entry.py` | Manual-entry endpoint |
+| `test_security.py` | Rate limiting, prompt-injection hardening, CORS, headers, redaction |
+| `test_first_person.py` | "I" / "me" resolution for every signed-in user |
+| `test_us06_messy.py` | Messy language and typo handling |
 | `test_llm.py` | Mock LLM, Claude integration, retries, and conversation processing |
+| `test_benchmark_runner.py` | Benchmark comparator, runner flow, answer-key sanity, verbatim prompts |
+| `test_benchmark_report.py` | Benchmark report rendering (snapshot) |
 
 ### Latest Local Test Results
 
-As of October 31, 2026:
+As of November 2, 2026: **301 backend tests** and **91 frontend tests** passed locally. The Playwright specs run in CI.
 
-**121 tests passed.**
-
-These results were obtained through the local pytest suite. Live Claude API accuracy and complete frontend-to-backend workflows require separate validation.
-
-The repository also includes a GitHub Actions workflow to run Python tests automatically on pushes and pull requests.
+These results come from automated tests with a mocked LLM. Live Claude accuracy is measured separately by the benchmark and the alpha test session.
 
 ---
 
@@ -471,13 +495,16 @@ Before submitting a pull request, developers should verify that:
 
 The project uses environment variables for development configuration.
 
-Required configuration variables are documented in `.env.example`:
+Configuration variables are documented in `.env.example`:
 
 ```env
 ANTHROPIC_API_KEY=
-LLM_MODEL=
+LLM_MODEL=            # defaults to claude-sonnet-5-5
 SESSION_SECRET=
+WEB_ORIGINS=http://localhost:5173
 ```
+
+`LLM_PROVIDER` can be set to `demo` (built-in demo assistant, the default without an API key), `claude`, or `fake` (test-only scripted fixtures).
 
 Actual values belong in a local `.env` file.
 
@@ -493,14 +520,10 @@ For setup and environment configuration, refer to [SETUP.md](SETUP.md).
 
 Planned work includes:
 
-- Completing the React interface
-- Connecting frontend components to backend endpoints
-- Integrating the live Claude assistant into the user experience
-- Supporting complete expense preview and confirmation workflows
-- Displaying group balances and expense history
-- Running end-to-end Alpha scenarios
-- Recording accuracy and prompt-count metrics
-- Improving the application based on testing results
+- Running the alpha test session and recording results
+- Settle up and conversational-correction UI
+- External user testing in a later stage
+- Voice input, after the text workflow is reliable
 
 ---
 
@@ -510,6 +533,10 @@ Planned work includes:
 - [Alpha Testing Plan](docs/AlphaTesting.md)
 - [User Stories](docs/UserStories.md)
 - [Alpha Validation Decision](docs/alpha-validation-decision.md)
+- [Benchmark Scenarios B1–B5](docs/benchmarks.md)
+- [Alpha Results](docs/alpha-results.md)
+- [Alpha Submission Checklist and Activities Draft](docs/alpha-submission.md)
+- [API Reference](docs/api.md)
 
 Additional planning and development tasks are tracked through GitHub issues.
 

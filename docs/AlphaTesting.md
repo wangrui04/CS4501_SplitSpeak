@@ -10,11 +10,13 @@ across varying levels of complexity.
 ## Alpha Testing Scope
 
 - Testers: 3 development team members
-- Scenarios: 6
-- Attempts: Each team member tests all 6 scenarios
-- Total test attempts: 18
+- Scenarios: 5 benchmark scenarios, B1–B5 (see [benchmarks.md](benchmarks.md))
+- Attempts: Each team member tests all 5 scenarios
+- Total test attempts: 15
 - Target accuracy: >= 90%
-- Minimum passing attempts: 17 out of 18
+- Minimum passing attempts: 14 out of 15
+
+> Revised from the original 6 scenarios / 18 attempts after the team adopted the benchmark document. The original six user-story scenarios are kept below and run as informational benchmark cases.
 
 ## Test Categories
 
@@ -33,19 +35,20 @@ across varying levels of complexity.
 ## Success Criteria
 
 A test attempt passes if:
-- The AI correctly identifies the payer.
-- All items and their amounts are correctly interpreted.
-- Each participant receives the correct allocation.
-- The total allocation matches the expense total.
+- Every person's cost share matches the answer key to the cent.
+- Every person's amount paid matches the answer key.
+- Every settlement transfer ("who pays whom") matches the answer key.
 - The correct split is produced within 5 user prompts.
 
 A prompt is defined as one user message sent to the LLM,
 including clarification responses and corrections.
 
+Results are recorded in [alpha-results.md](alpha-results.md).
+
 ## Evaluation Method
 
 1. Prepare the expected answer for each scenario.
-2. Each team member independently tests all 6 scenarios.
+2. Each team member independently tests all 5 scenarios, pasting the prompts verbatim.
 3. Record the AI's generated split.
 4. Compare the results against the expected answer.
 5. Record the number of prompts used.
