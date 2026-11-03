@@ -544,6 +544,12 @@ class GeminiLlmClient:
                 logger.warning(
                     "Gemini request failed: %s (HTTP %s)", name, code
                 )
+                if code == 404:
+                    logger.warning(
+                        "Gemini model %r was not found for this key. "
+                        "Set GEMINI_MODEL to a model your key can use.",
+                        self.model,
+                    )
                 raise LlmError(
                     "LLM_REQUEST_FAILED"
                 ) from None

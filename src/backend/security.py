@@ -49,7 +49,12 @@ class RateLimiter:
 
 
 class SecretRedactionFilter(logging.Filter):
-    """Replace secret values from the environment in log records."""
+    """Replace secret values from the environment in log records.
+
+    Records without a secret are left untouched: rewriting msg/args on
+    every record breaks formatters that unpack args, such as uvicorn's
+    access log.
+    """
 
     def filter(self, record):
         secrets = [
@@ -59,12 +64,34 @@ class SecretRedactionFilter(logging.Filter):
         if not secrets:
             return True
 
-        message = record.getMessage()
-        for secret in secrets:
-            message = message.replace(secret, "[REDACTED]")
+        try:
+            message = record.getMessage()
+        except Exception:
+            return True
+        if not any(secret in message for secret in secrets):
+            return True
 
-        record.msg = message
-        record.args = ()
+        def redact(value):
+            if not isinstance(value, str):
+                return value
+            for secret in secrets:
+                value = value.replace(secret, "[REDACTED]")
+            return value
+
+        # Redact in place so the args keep their shape for formatters.
+        record.msg = redact(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact(arg) for arg in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {key: redact(arg) for key, arg in record.args.items()}
+
+        # A secret inside a non-string arg: fall back to the full text.
+        if any(secret in record.getMessage() for secret in secrets):
+            message = record.getMessage()
+            for secret in secrets:
+                message = message.replace(secret, "[REDACTED]")
+            record.msg = message
+            record.args = ()
         return True
 
 

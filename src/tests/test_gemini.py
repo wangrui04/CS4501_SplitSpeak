@@ -160,6 +160,18 @@ def test_quota_error_fails_without_leaking_key(caplog):
     assert FAKE_KEY not in caplog.text
 
 
+def test_unknown_model_logs_a_hint(caplog):
+    client, _ = make_client([
+        genai_errors.ClientError(404, {"error": {"message": "not found"}}),
+    ])
+
+    with caplog.at_level(logging.WARNING, logger="splitwise.llm"):
+        with pytest.raises(LlmError):
+            parse(client)
+
+    assert "Set GEMINI_MODEL" in caplog.text
+
+
 def test_key_required():
     with pytest.raises(ValueError, match="GEMINI_API_KEY"):
         GeminiLlmClient(api_key=None, sdk=MagicMock())

@@ -238,6 +238,34 @@ def test_unexpected_llm_errors_never_logged_in_full(db, caplog, monkeypatch):
     assert FAKE_KEY not in caplog.text
 
 
+def test_redaction_leaves_records_without_secrets_untouched(monkeypatch):
+    # uvicorn's access log formatter unpacks exactly 5 args.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
+    args = ("127.0.0.1:5000", "GET", "/api/session", "1.1", 200)
+    record = logging.LogRecord(
+        "uvicorn.access", logging.INFO, __file__, 1,
+        '%s - "%s %s HTTP/%s" %d', args, None,
+    )
+
+    from backend.security import SecretRedactionFilter
+    SecretRedactionFilter().filter(record)
+
+    assert record.args == args
+
+
+def test_redaction_keeps_arg_shape_when_secret_present(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
+    record = logging.LogRecord(
+        "x", logging.INFO, __file__, 1, "%s %s", ("key", FAKE_KEY), None,
+    )
+
+    from backend.security import SecretRedactionFilter
+    SecretRedactionFilter().filter(record)
+
+    assert record.args == ("key", "[REDACTED]")
+    assert FAKE_KEY not in record.getMessage()
+
+
 def test_key_redacted_from_logs(caplog, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
     logger = logging.getLogger("splitwise.test")
