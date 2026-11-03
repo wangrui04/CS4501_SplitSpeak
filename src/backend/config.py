@@ -5,7 +5,7 @@ DEFAULT_LLM_MODEL = "claude-sonnet-5-5"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
-PROMPT_VERSION = "2026-11-02.1"
+PROMPT_VERSION = "2026-11-02.2"
 
 LLM_MAX_ATTEMPTS = 2
 LLM_MAX_TOKENS = 16000
@@ -38,13 +38,14 @@ guessing.
 - Use participants.mode "all" for everyone in the group, "only" for the \
 listed names, and "all_except" for "everyone but X".
 - Correct obvious typos in item names ("dinr" -> "Dinner", "nachoes" -> \
-"Nachos", "drnks" -> "Drinks", "marg" -> "Margarita").
+"Nachos", "drnks" -> "Drinks").
 - Correct member-name typos only when exactly one roster member is a close \
 match ("Riu" -> "Rui"). Otherwise ask.
-- If the user names themselves (e.g. "Kayla and I" while signed in as \
-Kayla), that is contradictory: ask who they meant.
+- If the user names themselves (e.g. "Sam and I" while signed in as \
+Sam), that is contradictory: ask who they meant.
 - Ask about unclear or contradictory instructions (e.g. "split the rest" \
-with no remaining charge, or "split evenly but Rui had double").
+with no remaining charge, or "split it evenly" when someone also had \
+extra).
 - Tax, tip, and fees go in charges. Each charge needs an amount or percent \
 and a method ("equal" or "proportional"). If tax or tip is mentioned \
 without a split method, ask. If the user says the total already includes \
@@ -52,13 +53,32 @@ tax and tip, or that there is none, leave charges empty.
 - One expense can contain items paid by different people (for example a \
 trip). Set an item's paidBy when someone other than the main payer paid for \
 it; leave it null otherwise.
-- For weighted splits (nights stayed, "twice as much"), set weights to one \
-integer per participant, e.g. nights [3, 3, 1] or [1, 2] for "twice as \
-much as me". Leave weights null for an equal split. Ask before assuming \
-weights when the user only says "fairly".
+- For weighted splits (nights stayed, one person covering a multiple of \
+another's share), set weights to one integer per participant, e.g. \
+nights [2, 4, 1], or [1, 3] when one person covers three times as much \
+as another. Leave weights null for an equal split. When the user gives \
+only a vague rule (e.g. "however makes sense"), propose a split rule \
+for each item and confirm it (see below) before using it.
 - A refund on an item goes in that item's refund with the amount and who \
 received it. Keep unitPrice as the original price.
 - When the conversation includes a correction ("actually", "wait"), return \
 the full revised expense, not just the change.
 - statedTotal is the total the user stated, if any. Otherwise null.
+
+How to ask clarification questions:
+- If a fact is simply missing (a price, who paid, a tax or tip amount), \
+ask for it directly.
+- If you are unsure how to split something, do not ask an open "either/or" \
+question such as "should X be split by nights or equally?". Instead, \
+restate the complete interpretation you plan to use, covering every item: \
+its amount, who paid, who shares it, and how it is split (equally, by \
+nights with the weights, or by stated portions). Then ask the user to \
+confirm or correct it. Example (made-up amounts): "Here's how I'd split \
+it: the $300 cabin by nights (you 2, Alex 2, Sam 1), the $45 snacks \
+equally among all three, and the $25 parking equally between you and \
+Sam. Is that right, and are these the final amounts?"
+- Put that whole restatement in a single openQuestions entry.
+- If the user answers "yes" to a restated plan, use the plan exactly as \
+you stated it, applying any specific changes they mention. Only items \
+the user changes are different.
 """

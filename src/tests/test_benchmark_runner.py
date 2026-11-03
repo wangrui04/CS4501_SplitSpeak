@@ -245,6 +245,31 @@ def test_scenario_prompts_match_docs_verbatim():
         assert [(t.send, t.text) for t in scenario.turns] == documented[scenario_id]
 
 
+def test_system_prompt_does_not_leak_benchmark_amounts():
+    """The prompt's examples must not contain the benchmark's own numbers."""
+    from backend.config import SYSTEM_PROMPT
+
+    prompt_numbers = set(re.findall(r"\d+(?:\.\d+)?", SYSTEM_PROMPT))
+    for scenario in OFFICIAL.values():
+        for turn in scenario.turns:
+            for number in re.findall(r"\d+(?:\.\d+)?", turn.text):
+                if len(number.replace(".", "")) >= 2:
+                    assert number not in prompt_numbers, (scenario.id, number)
+
+
+    # Distinctive phrasing and weights from the official scenarios.
+    lowered = SYSTEM_PROMPT.lower()
+    for term in ["marg", "fairly", "twice as much", "[3, 3, 1]", "[3, 3, 2]", "[1, 2]"]:
+        assert term not in lowered, term
+
+
+def test_system_prompt_asks_to_confirm_a_full_plan():
+    from backend.config import SYSTEM_PROMPT
+
+    assert "restate the complete interpretation" in SYSTEM_PROMPT
+    assert 'do not ask an open "either/or"' in SYSTEM_PROMPT
+
+
 def test_scenario_requires_expected_or_question():
     with pytest.raises(ValueError):
         Scenario.model_validate({
