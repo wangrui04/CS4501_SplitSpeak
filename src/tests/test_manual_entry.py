@@ -78,6 +78,14 @@ def test_invalid_amounts_rejected(db, amount):
     assert list_expenses(db, 1) == []
 
 
+@pytest.mark.parametrize("amount", ["0", "0.00", 0])
+def test_zero_amount_rejected_with_clear_message(db, amount):
+    response = signed_in(db).post(URL, json=payload(amount=amount))
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Amount must be greater than 0"
+
+
 def test_unknown_payer_rejected(db):
     response = signed_in(db).post(URL, json=payload(paidBy="Aly"))
 

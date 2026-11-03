@@ -54,31 +54,62 @@ Copy the numbers and decision from [alpha-results.md](alpha-results.md) §4–5.
 
 ## 4. Activity 3: TDD evidence
 
-### Test-first work on `feature/alpha-25-37`
+### What actually happened on `feature/alpha-25-37`
 
-For each issue, tests were written first and run red before the implementation. Each commit then contains the tests together with the code that makes them pass. The exception is #36: the Playwright specs were committed on their own, **before** the features they cover.
+This sprint did **not** follow strict test-first order for most issues. State it plainly in the Activities Document:
 
-| Commit | Issue | Red run before implementation |
+- **The tests were AI-generated** (Claude Code), written alongside the implementation in the same sitting, usually test file first and code immediately after.
+- **A failing run before implementation was confirmed for only some issues** (table below). For the rest, the tests were never run red before the code existed.
+- **The tests were validated afterwards with modification (mutation) testing**, described below. That found 5 weak tests, which were then fixed.
+- **The one truly test-first piece is #36.** The Playwright specs were committed on their own (`94b66e2`) before the features they cover (#27, #29, #30).
+
+| Commit | Issue | Run red before implementation? |
 | --- | --- | --- |
-| `fa7fc81` | Upstream benchmark model | `test_trip_allocation.py` failed at import (`WeightsMismatchError` did not exist) |
-| `e82120c` | #28 | `test_settlement.py` chat-preview test failed with `KeyError: 'paid'` |
-| `18c3494` | #26 | manual-entry tests written before `backend/manual.py` |
-| `b14b5a5` | #34 | security tests written before `backend/security.py` |
-| `d0827a0` | #35 | the 2 contradictory "Kayla and I" tests failed; the 10 resolution tests already passed |
-| `ed67f52` | #27, #30 | 5 escape-hatch tests failed before the modal changes |
-| `94b66e2` | #36 | E2E specs committed before #27, #29, and #30 were implemented |
+| `fa7fc81` | Upstream benchmark model | Partly: the test file failed to import because `WeightsMismatchError` didn't exist yet. No assertion was checked. |
+| `e82120c` | #28 | Partly: only the chat-preview test was run red (`KeyError: 'paid'`). The rest of the file was written with the code. |
+| `18c3494` | #26 | No |
+| `b14b5a5` | #34 | No |
+| `d0827a0` | #35 | Yes: the 2 contradictory "Kayla and I" tests failed. The other 10 already passed, so they did not drive any code. |
+| `d88d6b2`, `e766b64` | #31, #32 | No. The code came first, and the report snapshot was generated from the code's own output. |
+| `95f4762` | #25 | No |
+| `94b66e2` | #36 | Committed first, but not run locally (no disk space for the browser). The first CI run on this commit is expected to fail. |
+| `ed67f52` | #27, #30 | #30: yes, 5 of 6 escape-hatch tests failed first. #27: no. |
+| `2ba43f9` | #29 | No |
 
-**Failing CI runs:** _link the first GitHub Actions run for `94b66e2` once the branch is pushed. The E2E job should fail there, because the features land in later commits._
+**Failing CI runs:** _link the first GitHub Actions run for `94b66e2` once the branch is pushed._
 
-### How AI-generated tests were reviewed and corrected
+### Validating the tests: modification testing
 
-Examples from this sprint:
+To check that the tests actually guard the critical code, 49 deliberate breaks ("mutants") were made one at a time: 39 in the backend and benchmark, 10 in the frontend. The full suite was run after each one, and the file was restored afterwards. A break is **caught** if at least one test fails. If every test still passes, the tests are weak there.
+
+The script and the full list of breaks are in [`scripts/mutation_test.py`](../scripts/mutation_test.py). Run `.venv/bin/python scripts/mutation_test.py "$PWD"` from the repo root to repeat it.
+
+Areas covered: dollars-to-cents conversion, leftover-cent rounding, "everyone except", resolving "I"/"me", weights, refunds, pooled tax/tip, the validator's sum and name checks, settlement order, tie-breaks, and direction, questions never becoming guessed previews, draft and double-confirm guards, manual-entry rules, rate limiting, input sanitizing, delimiting user text as data, the benchmark comparator, runner, and report, and the frontend money parser, form validation, balances, and escape hatch.
+
+**First pass: 44 of 49 caught. These 5 got through:**
+
+| Break | Why no test failed | Fix |
+| --- | --- | --- |
+| Confirm allowed for a draft not in "preview" status | The test only used drafts with no saved preview, so another check rejected them first. A real stale preview (preview, then a correction that triggers a question) was never tested. | New test `test_stale_preview_cannot_be_confirmed_after_followup_question` |
+| No group refetch after saving | The App test checked a fetch that already happens on page load. | US-01 App test now requires a second fetch and the updated balance on screen |
+| Validator accepts an unknown payer | Only unknown participants were tested. | New test `test_unknown_payer` |
+| Refund larger than the item allowed | The test accepted any `ValueError`, and a later check raised one anyway. | Test now requires the "Refund is larger" error |
+| Manual entry accepts $0 | Any 400 passed, including one from the validator's check. | New test `test_zero_amount_rejected_with_clear_message` |
+
+**After the fixes: 49 of 49 caught.** The most valuable find was the first one: without that check, a stale preview could have been saved after the user had started correcting it.
+
+### Other ways the AI-generated tests were reviewed and corrected
 
 1. **Mocked tests hid a broken live path.** The Claude client tests mocked the SDK and checked for a forced `tool_choice`, so they passed while every real request to Sonnet 5.5 would fail (the model rejects forced tool use and `temperature`). The tests were rewritten to assert that those parameters are *not* sent, and the client moved to structured outputs (`24f6281`).
 2. **A property test found a real bug.** The Hypothesis test for settlement produced an expense with an empty payments list, and `payments_of()` wrongly treated it as missing. The code was fixed, not the test.
-3. **A wrong expectation in a generated test.** A comparator test expected both a share and a settlement mismatch, but its hand-built preview kept the original transfers, so only the share differed. The expectation was corrected, and an assertion on the human-readable reason was added.
+3. **A wrong expectation in a generated test.** A comparator test expected both a share and a settlement mismatch, but its hand-built preview kept the original transfers, so only the share differed. The expectation was corrected.
 4. **A test that encoded the wrong behavior.** The old manual-entry test asserted a payload built with `parseFloat` × 100, and that nothing was saved through the API. It was replaced with tests for the real endpoint and string-based cents conversion.
 5. **An answer-key check against itself.** The benchmark keys are typed by hand from `Benchmarks.docx` rather than computed, so `test_answer_key_sanity` can catch typos: shares must equal amounts paid, and the settlement function must reproduce the key's transfers.
+
+### Lessons for the next sprint
+
+- Write the tests yourselves (or review AI-written tests) and run them red **before** implementing, then commit them separately so the order shows in git history.
+- Run modification tests on new tests before relying on them.
 
 ---
 

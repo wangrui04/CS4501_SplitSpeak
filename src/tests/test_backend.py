@@ -861,6 +861,61 @@ def test_reject_unresolved_or_pending_drafts(db):
         assert resp3.status_code == 400
 
 
+def test_stale_preview_cannot_be_confirmed_after_followup_question(db):
+    """A correction that triggers a question leaves the old preview saved.
+
+    The draft is "pending" again, so confirm must refuse it even though
+    a valid-looking preview is still stored on the conversation.
+    """
+    preview_turn = {
+        "description": "Dinner",
+        "payer": "ME",
+        "items": [{
+            "name": "Dinner",
+            "quantity": 1,
+            "unitPrice": "30.00",
+            "participants": {"mode": "all", "names": []},
+        }],
+        "charges": [],
+        "statedTotal": "30.00",
+        "openQuestions": [],
+    }
+    question_turn = {
+        **preview_turn,
+        "openQuestions": [{"field": "payer", "question": "Who paid?"}],
+    }
+    app = create_app(
+        db=db,
+        session_secret="test-secret-with-at-least-32-characters",
+        llm=FakeLlmClient([preview_turn, question_turn]),
+    )
+    with TestClient(app) as test_client:
+        test_client.post("/api/session", json={"name": "Sarah"})
+        group_id = get_apartment(db)["id"]
+
+        first = test_client.post(
+            "/api/chat", json={"groupId": group_id, "message": "dinner 30"}
+        ).json()
+        assert first["type"] == "preview"
+
+        second = test_client.post("/api/chat", json={
+            "conversationId": first["conversationId"],
+            "message": "actually wait, Kayla paid",
+        }).json()
+        assert second["type"] == "question"
+
+        conversation = get_conversation(db, first["conversationId"])
+        assert conversation["status"] == "pending"
+        assert conversation["finalPreview"] is not None  # stale preview kept
+
+        response = test_client.post(
+            f"/api/conversations/{first['conversationId']}/confirm"
+        )
+
+        assert response.status_code == 400
+        assert list_expenses(db, group_id) == []
+
+
 def test_server_draft_manipulated_total_rejected(db):
     app = create_app(
         db=db,

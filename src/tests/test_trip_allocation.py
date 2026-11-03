@@ -148,7 +148,8 @@ def test_refund_reduces_cost_and_counts_as_negative_paid():
 
 
 def test_refund_larger_than_item_rejected():
-    with pytest.raises(ValueError):
+    # match= makes sure the refund check raised, not a later check.
+    with pytest.raises(ValueError, match="Refund is larger"):
         allocate_items(
             [item("Lodging", "50.00", [], mode="all",
                   refund={"amount": "60.00", "recipient": "ME"})],

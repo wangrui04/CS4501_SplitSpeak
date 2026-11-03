@@ -455,6 +455,13 @@ describe('ALPHA-15: Scaffold React Application', () => {
       });
 
       expect(balanceSpy).toHaveBeenCalledWith(1);
+
+      // The first fetch happens on page load, so a refetch after saving
+      // means a second call, and the new balance from it is displayed.
+      await waitFor(() => {
+        expect(balanceSpy).toHaveBeenCalledTimes(2);
+      });
+      expect(await screen.findByText('+$20.00')).toBeInTheDocument();
     });
   });
 

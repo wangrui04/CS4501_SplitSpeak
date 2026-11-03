@@ -16,3 +16,6 @@ src/frontend/dist/
 # Editor and OS
 .vscode/
 .DS_Store
+
+# Mutation test output
+scripts/mutation_results.json

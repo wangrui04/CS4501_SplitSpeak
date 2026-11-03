@@ -84,6 +84,15 @@ def test_negative_amount(valid_expense, valid_allocation):
     assert_error(result, "NEGATIVE_AMOUNT")
 
 
+def test_unknown_payer(valid_expense, valid_allocation):
+    valid_expense["payer"] = "Ben"
+
+    result = validate(
+        valid_expense, valid_allocation, ROSTER
+    )
+    assert_error(result, "UNKNOWN_NAME")
+
+
 def test_unknown_name(valid_expense, valid_allocation):
     valid_expense["items"][0]["participants"] = {
         "mode": "only",
