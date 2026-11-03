@@ -48,7 +48,8 @@ jobs:
         run: npm test
 
   e2e:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 has no browser builds for ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
