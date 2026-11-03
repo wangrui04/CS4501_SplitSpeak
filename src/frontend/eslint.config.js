@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Build and test tooling runs in Node.
+    files: ['vite.config.js', 'playwright.config.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])
