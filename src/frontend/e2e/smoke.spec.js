@@ -18,7 +18,8 @@ async function signInAs(page, name) {
 test('unauthenticated users see the name picker', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Sign in to Splitwise' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to SplitSpeak' })).toBeVisible();
+  await expect(page).toHaveTitle('SplitSpeak');
   await expect(page.getByRole('button', { name: 'Add an expense' })).toHaveCount(0);
 });
 
