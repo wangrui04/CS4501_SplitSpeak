@@ -4,23 +4,25 @@ import { test, expect } from '@playwright/test';
 
 async function signIn(page) {
   await page.goto('/');
-  await page.getByRole('button', { name: /continue as sarah/i }).click();
+  await page.getByRole('radio', { name: /Sarah/ }).click();
+  await page.getByRole('button', { name: 'Continue as Sarah' }).click();
   await expect(page.getByRole('heading', { name: 'Apartment 4B' })).toBeVisible();
 }
 
 async function createExpense(page) {
   await page.getByRole('button', { name: /add an expense/i }).click();
   // Existing manual-entry path creates a saved expense before the popup test.
+  await page.getByRole('tab', { name: 'Manual entry' }).click();
   await page.getByLabel('Description').fill('Dinner test expense');
-  await page.getByLabel(/Amount/).fill('30.00');
-  await page.getByRole('button', { name: /^confirm|^save/i }).click();
+  await page.getByLabel('Amount ($)').fill('30.00');
+  await page.getByRole('button', { name: 'Save expense' }).click();
   await expect(page.getByText('Dinner test expense')).toBeVisible();
 }
 
 test('saved expense opens detail dialog with payer, shares and amount owed', async ({ page }) => {
   await signIn(page);
   await createExpense(page);
-  await page.getByText('Dinner test expense').click();
+  await page.getByRole('region', { name: 'Expenses' }).getByText('Dinner test expense').click();
   const modal = page.getByRole('dialog', { name: /expense details|dinner test expense/i });
   await expect(modal).toBeVisible();
   await expect(modal.getByText('Sarah')).toBeVisible();
@@ -34,7 +36,7 @@ test('saved expense opens detail dialog with payer, shares and amount owed', asy
 test('confirmed expense can be edited and saved without adding a duplicate', async ({ page }) => {
   await signIn(page);
   await createExpense(page);
-  await page.getByText('Dinner test expense').click();
+  await page.getByRole('region', { name: 'Expenses' }).getByText('Dinner test expense').click();
   const modal = page.getByRole('dialog', { name: /expense details|dinner test expense/i });
   await modal.getByRole('button', { name: /edit expense/i }).click();
   await modal.getByLabel(/description/i).fill('Corrected dinner test expense');
@@ -47,7 +49,7 @@ test('confirmed expense can be edited and saved without adding a duplicate', asy
 test('canceling expense edit leaves saved values unchanged', async ({ page }) => {
   await signIn(page);
   await createExpense(page);
-  await page.getByText('Dinner test expense').click();
+  await page.getByRole('region', { name: 'Expenses' }).getByText('Dinner test expense').click();
   const modal = page.getByRole('dialog', { name: /expense details|dinner test expense/i });
   await modal.getByRole('button', { name: /edit expense/i }).click();
   await modal.getByLabel(/description/i).fill('Should not persist');
