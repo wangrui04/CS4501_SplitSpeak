@@ -139,3 +139,24 @@ export async function addGroupMember(groupId, name) {
     }),
   });
 }
+
+// Placeholders for #46 (Settle up); not implemented yet.
+export async function recordSettlement() {
+  throw new Error('Not implemented');
+}
+
+export async function fetchSettlements() {
+  throw new Error('Not implemented');
+}
+
+export async function sendReminder() {
+  throw new Error('Not implemented');
+}
+
+export async function fetchNotifications() {
+  throw new Error('Not implemented');
+}
+
+export async function markNotificationRead() {
+  throw new Error('Not implemented');
+}
