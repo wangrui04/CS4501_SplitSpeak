@@ -1,0 +1,45 @@
+{
+  "id": "US-04",
+  "label": "Quantities and tip",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I paid for dinner. Kayla got two $10 drinks, Rui got one $10 drink, and I didn't have anything. The tip was $6. Split the tip proportionally.",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustNotAsk": true
+  },
+  "categories": [
+    "quantities",
+    "tax/tip"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 0,
+      "Kayla": 2400,
+      "Rui": 1200
+    },
+    "paid": {
+      "Sarah": 3600,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 2400
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1200
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}

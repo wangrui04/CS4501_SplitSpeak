@@ -1,0 +1,21 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# React
+node_modules/
+src/frontend/dist/
+
+# Editor and OS
+.vscode/
+.DS_Store
+
+# Mutation test output
+scripts/mutation_results.json

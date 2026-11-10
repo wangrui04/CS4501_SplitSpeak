@@ -1,0 +1,50 @@
+{
+  "id": "US-06",
+  "label": "Messy language and typos",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I paid for dinr. Me and Kayla shared nachoes for $16. Riu got 2 drnks for $5 each. Split the rest evenly.",
+      "send": "always"
+    },
+    {
+      "text": "No, that's everything. No tax or tip.",
+      "send": "if_asked"
+    }
+  ],
+  "informational": true,
+  "behavior": {
+    "mustAskBeforeFinalPreview": true
+  },
+  "categories": [
+    "participants",
+    "quantities"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 800,
+      "Kayla": 800,
+      "Rui": 1000
+    },
+    "paid": {
+      "Sarah": 2600,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1000
+      },
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 800
+      }
+    ],
+    "expectedPrompts": 2
+  },
+  "notes": "The first response must be a question about what 'the rest' means."
+}

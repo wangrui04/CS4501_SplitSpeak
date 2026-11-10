@@ -1,0 +1,42 @@
+{
+  "id": "MESSY-5",
+  "label": "All caps",
+  "signedInAs": "Sarah",
+  "group": "Apartment 4B",
+  "turns": [
+    {
+      "text": "I PAID $45 FOR TACOS FOR EVERYONE SPLIT EVEN",
+      "send": "always"
+    }
+  ],
+  "informational": true,
+  "behavior": {},
+  "categories": [
+    "amounts"
+  ],
+  "expected": {
+    "shares": {
+      "Sarah": 1500,
+      "Kayla": 1500,
+      "Rui": 1500
+    },
+    "paid": {
+      "Sarah": 4500,
+      "Kayla": 0,
+      "Rui": 0
+    },
+    "settlement": [
+      {
+        "from": "Kayla",
+        "to": "Sarah",
+        "cents": 1500
+      },
+      {
+        "from": "Rui",
+        "to": "Sarah",
+        "cents": 1500
+      }
+    ],
+    "expectedPrompts": 1
+  }
+}
