@@ -10,6 +10,7 @@ import ErrorMessage from './components/ErrorMessage';
 import NamePicker from './components/NamePicker';
 import AddExpenseModal from './components/AddExpenseModal';
 import GroupManagementModal from './components/GroupManagementModal';
+import ExpenseDetailsModal from './components/ExpenseDetailsModal';
 import SettleUpModal from './components/SettleUpModal';
 import RemindersInbox from './components/RemindersInbox';
 
@@ -42,6 +43,7 @@ export default function App() {
   const [isSwitchingUser, setIsSwitchingUser] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [groupModalMode, setGroupModalMode] = useState(null);
+  const [selectedExpenseId, setSelectedExpenseId] = useState(null);
 
   const [isSettleUpOpen, setIsSettleUpOpen] = useState(false);
   // Tagged with its group so another group's list never shows.
@@ -243,6 +245,19 @@ export default function App() {
 
   const closeReminders = useCallback(() => setIsRemindersOpen(false), []);
 
+  const refreshExpenses = useCallback(async () => {
+    if (!selectedGroupId) return;
+
+    const [groupDetails, groupExpenses] = await Promise.all([
+      fetchGroup(selectedGroupId),
+      fetchGroupExpenses(selectedGroupId),
+    ]);
+
+    setDetails(groupDetails || null);
+    setExpenses(groupExpenses || []);
+    setRefreshKey((key) => key + 1);
+  }, [selectedGroupId]);
+
   const handleLogin = async (name) => {
     const session = await login(name);
 
@@ -268,6 +283,7 @@ export default function App() {
     setExpenses([]);
     setIsSwitchingUser(false);
     setIsAddExpenseOpen(false);
+    setSelectedExpenseId(null);
     setGroupModalMode(null);
     setIsSettleUpOpen(false);
     setIsRemindersOpen(false);
@@ -292,6 +308,7 @@ export default function App() {
     });
 
     setSelectedGroupId(newGroup.id);
+    setSelectedExpenseId(null);
     setDetails(null);
     setExpenses([]);
     setRefreshKey((key) => key + 1);
@@ -309,6 +326,11 @@ export default function App() {
 
     setRefreshKey((key) => key + 1);
     setGroupModalMode(null);
+  };
+
+  const selectGroup = (id) => {
+    setSelectedGroupId(id);
+    setSelectedExpenseId(null);
   };
 
   const activeGroup =
@@ -362,7 +384,7 @@ export default function App() {
             <Sidebar
               groups={groups}
               selectedGroupId={selectedGroupId}
-              onSelectGroup={setSelectedGroupId}
+              onSelectGroup={selectGroup}
               friends={activeGroup?.members}
               currentUser={currentUser}
               onCreateGroup={() =>
@@ -398,6 +420,9 @@ export default function App() {
                 settlements.groupId === selectedGroupId
                   ? settlements.list
                   : undefined
+              }
+              onExpenseClick={(expense) =>
+                setSelectedExpenseId(expense.id)
               }
             />
 
@@ -443,7 +468,18 @@ export default function App() {
             />
           )}
 
-                    {groupModalMode && (
+
+          {selectedExpenseId !== null && activeGroup && (
+            <ExpenseDetailsModal
+              key={`${selectedGroupId}-${selectedExpenseId}`}
+              group={activeGroup}
+              expenseId={selectedExpenseId}
+              onClose={() => setSelectedExpenseId(null)}
+              onSaved={refreshExpenses}
+            />
+          )}
+
+          {groupModalMode && (
             <GroupManagementModal
               mode={groupModalMode}
               group={activeGroup}

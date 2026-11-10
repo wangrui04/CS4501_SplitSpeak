@@ -177,6 +177,31 @@ def create_database(path=":memory:"):
         );
     """)
 
+
+    # Add columns needed for editing saved expenses.
+    columns = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(expenses)")
+    }
+
+    if "line_items_json" not in columns:
+        db.execute(
+            "ALTER TABLE expenses ADD COLUMN line_items_json TEXT"
+        )
+
+    if "charges_json" not in columns:
+        db.execute(
+            "ALTER TABLE expenses ADD COLUMN charges_json TEXT"
+        )
+
+    if "version" not in columns:
+        db.execute(
+            "ALTER TABLE expenses "
+            "ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
+        )
+
+    db.commit()
+
     return LockedConnection(db)
 
 

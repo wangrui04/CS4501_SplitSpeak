@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 const API_PORT = 8010;
 const WEB_PORT = 5180;
 const venvPython = '../../.venv/bin/python';
-const python = process.env.E2E_PYTHON || (existsSync(venvPython) ? venvPython : 'python');
+const python = process.env.E2E_PYTHON || (existsSync(venvPython) ? venvPython : (process.platform === 'win32' ? 'py' : 'python'));
 
 export default defineConfig({
   testDir: './e2e',

@@ -4,11 +4,20 @@ import sqlite3
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from backend.repository import get_group, list_groups
+from backend.repository import (
+    get_group,
+    list_groups,
+    list_expenses,
+    edit_expense,
+)
 
 
 router = APIRouter()
 
+
+# ============================================================
+# REQUEST SCHEMAS
+# ============================================================
 
 class CreateGroupRequest(BaseModel):
     name: str
@@ -19,6 +28,10 @@ class AddMemberRequest(BaseModel):
     name: str
 
 
+# ============================================================
+# GROUP MANAGEMENT HELPERS
+# ============================================================
+
 def normalize_member(db, name):
     if not isinstance(name, str):
         raise ValueError("Member name must be a string")
@@ -28,7 +41,6 @@ def normalize_member(db, name):
     if not name or len(name) > 80:
         raise ValueError("Member name must be 1-80 characters")
 
-    # Preserve spelling of existing demo profiles.
     rows = db.execute(
         "SELECT DISTINCT name FROM group_members"
     ).fetchall()
@@ -57,7 +69,9 @@ def create_group(db, name, members):
         row["name"].casefold() == name.casefold()
         for row in existing
     ):
-        raise ValueError("A group with this name already exists")
+        raise ValueError(
+            "A group with this name already exists"
+        )
 
     cleaned = []
     seen = set()
@@ -73,7 +87,9 @@ def create_group(db, name, members):
         seen.add(key)
 
     if not cleaned:
-        raise ValueError("A group requires at least one member")
+        raise ValueError(
+            "A group requires at least one member"
+        )
 
     try:
         with db:
@@ -93,8 +109,11 @@ def create_group(db, name, members):
                     """,
                     (group_id, member, position),
                 )
+
     except sqlite3.IntegrityError:
-        raise ValueError("Unable to create group") from None
+        raise ValueError(
+            "Unable to create group"
+        ) from None
 
     return get_group(db, group_id)
 
@@ -111,7 +130,9 @@ def add_member(db, group_id, name):
         existing.casefold() == member.casefold()
         for existing in group["members"]
     ):
-        raise ValueError("Member already belongs to this group")
+        raise ValueError(
+            "Member already belongs to this group"
+        )
 
     if len(group["members"]) >= 50:
         raise ValueError("Group member limit reached")
@@ -124,13 +145,24 @@ def add_member(db, group_id, name):
                 (group_id, name, position)
                 VALUES (?, ?, ?)
                 """,
-                (group_id, member, len(group["members"])),
+                (
+                    group_id,
+                    member,
+                    len(group["members"]),
+                ),
             )
+
     except sqlite3.IntegrityError:
-        raise ValueError("Unable to add member") from None
+        raise ValueError(
+            "Unable to add member"
+        ) from None
 
     return get_group(db, group_id)
 
+
+# ============================================================
+# CREATE GROUP ENDPOINT
+# ============================================================
 
 @router.post("/api/groups", status_code=201)
 def create_group_endpoint(
@@ -140,7 +172,6 @@ def create_group_endpoint(
     db = request.app.state.db
     current_user = request.session["name"]
 
-    # The creator is automatically a member.
     members = [current_user]
 
     for name in payload.members:
@@ -150,15 +181,27 @@ def create_group_endpoint(
         members.append(name)
 
     try:
-        return create_group(db, payload.name, members)
+        return create_group(
+            db,
+            payload.name,
+            members,
+        )
+
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
             detail=str(exc),
-        )
+        ) from exc
 
 
-@router.post("/api/groups/{group_id}/members", status_code=201)
+# ============================================================
+# ADD MEMBER ENDPOINT
+# ============================================================
+
+@router.post(
+    "/api/groups/{group_id}/members",
+    status_code=201,
+)
 def add_member_endpoint(
     group_id: int,
     payload: AddMemberRequest,
@@ -182,9 +225,118 @@ def add_member_endpoint(
         )
 
     try:
-        return add_member(db, group_id, payload.name)
+        return add_member(
+            db,
+            group_id,
+            payload.name,
+        )
+
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
             detail=str(exc),
+        ) from exc
+
+
+# ============================================================
+# EDIT CONFIRMED EXPENSE ENDPOINT
+# ============================================================
+
+@router.put(
+    "/api/groups/{group_id}/expenses/{expense_id}"
+)
+def edit_expense_endpoint(
+    group_id: int,
+    expense_id: int,
+    request: Request,
+    payload: dict,
+):
+    """
+    Update an already-confirmed expense.
+
+    A valid signed-in group member is required.
+    The expense ID remains unchanged after editing.
+    """
+    db = request.app.state.db
+    current_user = request.session.get("name")
+
+    group = get_group(db, group_id)
+
+    if group is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Group not found",
         )
+
+    if current_user not in group["members"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Not a member of this group",
+        )
+
+    try:
+        return edit_expense(
+            db,
+            group_id,
+            expense_id,
+            payload,
+        )
+
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+# ============================================================
+# GET INDIVIDUAL EXPENSE DETAILS
+# ============================================================
+
+@router.get("/api/groups/{group_id}/expenses/{expense_id}")
+def get_expense_details_endpoint(
+    group_id: int,
+    expense_id: int,
+    request: Request,
+):
+    db = request.app.state.db
+    current_user = request.session.get("name")
+
+    group = get_group(db, group_id)
+
+    if group is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Group not found",
+        )
+
+    if current_user not in group["members"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Not a member of this group",
+        )
+
+    expenses = list_expenses(db, group_id)
+
+    expense = next(
+        (e for e in expenses if e["id"] == expense_id),
+        None,
+    )
+
+    if expense is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Expense not found",
+        )
+
+    return expense

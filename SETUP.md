@@ -257,7 +257,7 @@ CS4501_Splitwise/
 │   ├── benchmark_local.db
 │   ├── frontend/
 │   │   ├── package.json
-│   │   └── src/
+│   │   └── app/
 │   ├── backend/
 │   │   ├── __init__.py
 │   │   ├── allocation.py

@@ -69,7 +69,7 @@ function payerLabel(expense) {
   return `${payers[0]?.name || expense.payer} paid`;
 }
 
-function ExpenseRow({ expense, currentUser }) {
+function ExpenseRow({ expense, currentUser, onClick }) {
   const share = centsFor(expense.shares, currentUser);
 
   const paid = expense.payments
@@ -94,7 +94,15 @@ function ExpenseRow({ expense, currentUser }) {
   }
 
   return (
-    <li className="expense-row" tabIndex={0}>
+    <li className="expense-row expense-clickable">
+      {onClick && (
+        <button
+          type="button"
+          className="expense-row-action"
+          aria-label={`View ${expense.description} expense details`}
+          onClick={() => onClick(expense)}
+        />
+      )}
       <div className="exp-icon" aria-hidden="true">
         ▧
       </div>
@@ -131,6 +139,7 @@ export default function GroupView({
   onSettleUp,
   onAddMember,
   settlements,
+  onExpenseClick,
 }) {
   if (!group) {
     return (
@@ -283,6 +292,7 @@ export default function GroupView({
                     key={expense.id}
                     expense={expense}
                     currentUser={currentUser}
+                    onClick={onExpenseClick}
                   />
                 ))}
               </ul>
