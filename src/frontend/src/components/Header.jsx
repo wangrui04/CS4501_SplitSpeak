@@ -9,7 +9,7 @@ export default function Header({
     <header className="top">
       <div className="brand">
         <span className="logo" aria-hidden="true">✓</span>
-        <span>splitwise</span>
+        <span>SplitSpeak</span>
       </div>
 
       <div className="header-user-section">
