@@ -70,8 +70,17 @@ describe('#46: Settle up on the group page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm payment' }));
 
-    await waitFor(() => expect(fetchGroup.mock.calls.length).toBeGreaterThan(1));
-    expect(api.fetchSettlements.mock.calls.length).toBeGreaterThan(1);
+    // Generous timeout: the full suite runs many files in parallel.
+    expect(
+      await screen.findByText('Recorded $10.00 from Kayla.', {}, { timeout: 3000 })
+    ).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(fetchGroup.mock.calls.length).toBeGreaterThan(1);
+        expect(api.fetchSettlements.mock.calls.length).toBeGreaterThan(1);
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('shows recorded payments on the group page', async () => {

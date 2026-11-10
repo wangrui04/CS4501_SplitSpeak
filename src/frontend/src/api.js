@@ -140,23 +140,42 @@ export async function addGroupMember(groupId, name) {
   });
 }
 
-// Placeholders for #46 (Settle up); not implemented yet.
-export async function recordSettlement() {
-  throw new Error('Not implemented');
+// Settle up (#46). Amounts are integer cents. Only the person being
+// paid can record a payment; expectedOutstandingCents is the amount
+// the form showed, so a stale form is rejected (409).
+export async function recordSettlement(
+  groupId,
+  { from, to, cents, expectedOutstandingCents },
+) {
+  return request(`/api/groups/${groupId}/settlements`, {
+    method: 'POST',
+    body: JSON.stringify({
+      from,
+      to,
+      cents,
+      expectedOutstandingCents,
+    }),
+  });
 }
 
-export async function fetchSettlements() {
-  throw new Error('Not implemented');
+export async function fetchSettlements(groupId) {
+  return request(`/api/groups/${groupId}/settlements`);
 }
 
-export async function sendReminder() {
-  throw new Error('Not implemented');
+// In-app reminder of what `to` currently owes the signed-in user.
+export async function sendReminder(groupId, to) {
+  return request(`/api/groups/${groupId}/reminders`, {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  });
 }
 
 export async function fetchNotifications() {
-  throw new Error('Not implemented');
+  return request('/api/notifications');
 }
 
-export async function markNotificationRead() {
-  throw new Error('Not implemented');
+export async function markNotificationRead(notificationId) {
+  return request(`/api/notifications/${notificationId}/read`, {
+    method: 'POST',
+  });
 }

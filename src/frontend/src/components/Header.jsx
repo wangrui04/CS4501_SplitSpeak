@@ -2,6 +2,8 @@ export default function Header({
   currentUser,
   onSwitchUser,
   onSignOut,
+  unreadReminders = 0,
+  onOpenReminders,
 }) {
   const initial = currentUser ? currentUser.charAt(0).toUpperCase() : '?';
 
@@ -20,6 +22,25 @@ export default function Header({
 
         {currentUser && (
           <div className="header-buttons">
+            {onOpenReminders && (
+              <button
+                type="button"
+                className="header-btn"
+                onClick={onOpenReminders}
+                aria-label={
+                  unreadReminders > 0
+                    ? `Reminders (${unreadReminders} unread)`
+                    : 'Reminders'
+                }
+              >
+                Reminders
+                {unreadReminders > 0 && (
+                  <span className="reminder-badge" aria-hidden="true">
+                    {unreadReminders}
+                  </span>
+                )}
+              </button>
+            )}
             {onSwitchUser && (
               <button
                 type="button"
