@@ -44,6 +44,8 @@ export default function SettleUpModal({
   group,
   currentUser,
 }) {
+  // transfers is undefined until the group's balances have loaded.
+  const isLoading = !Array.isArray(group?.transfers);
   const debtors = (group?.transfers || []).filter(
     (transfer) => transfer.to === currentUser && transfer.cents > 0
   );
@@ -224,7 +226,9 @@ export default function SettleUpModal({
         </div>
 
         <div className="modalbody" role="tabpanel">
-          {!debtor ? (
+          {isLoading ? (
+            <p className="hint">Loading balances…</p>
+          ) : !debtor ? (
             empty
           ) : tab === 'record' ? (
             confirming ? (

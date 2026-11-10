@@ -241,6 +241,8 @@ export default function App() {
     }
   };
 
+  const closeReminders = useCallback(() => setIsRemindersOpen(false), []);
+
   const handleLogin = async (name) => {
     const session = await login(name);
 
@@ -332,16 +334,17 @@ export default function App() {
             ? () => setIsRemindersOpen((open) => !open)
             : undefined
         }
+        onCloseReminders={closeReminders}
+        remindersPanel={
+          currentUser && isRemindersOpen ? (
+            <RemindersInbox
+              notifications={notifications}
+              onMarkRead={handleMarkRead}
+              onClose={closeReminders}
+            />
+          ) : null
+        }
       />
-
-      {currentUser && isRemindersOpen && (
-        <div className="reminders-panel">
-          <RemindersInbox
-            notifications={notifications}
-            onMarkRead={handleMarkRead}
-          />
-        </div>
-      )}
 
       {loading ? (
         <LoadingSpinner message="Loading application..." />
@@ -428,10 +431,11 @@ export default function App() {
               group={
                 activeGroup && {
                   ...activeGroup,
+                  // Undefined until loaded, so the dialog can say so.
                   transfers:
                     details?.id === selectedGroupId
                       ? details.transfers || []
-                      : [],
+                      : undefined,
                 }
               }
               currentUser={currentUser}

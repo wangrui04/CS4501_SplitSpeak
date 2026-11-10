@@ -53,8 +53,11 @@ describe('#46: Settle up on the group page', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Settle up' }));
 
+    // The button can be clicked before balances load, so wait for them.
     const dialog = screen.getByRole('dialog', { name: 'Settle up' });
-    expect(within(dialog).getByRole('radio', { name: 'Kayla owes you $30.00' })).toBeChecked();
+    expect(
+      await within(dialog).findByRole('radio', { name: 'Kayla owes you $30.00' })
+    ).toBeChecked();
   });
 
   it('refreshes balances and history after recording a payment', async () => {
@@ -66,7 +69,7 @@ describe('#46: Settle up on the group page', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Settle up' }));
-    fireEvent.change(screen.getByLabelText('Amount ($)'), { target: { value: '10' } });
+    fireEvent.change(await screen.findByLabelText('Amount ($)'), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm payment' }));
 

@@ -249,6 +249,14 @@ describe('#46: Record payment', () => {
     expect(amountInput()).toHaveValue('30.00');
   });
 
+  it('shows a loading state, not "no one owes you", before balances load', () => {
+    renderModal({ group: { ...group, transfers: undefined } });
+
+    expect(screen.getByText('Loading balances…')).toBeInTheDocument();
+    expect(screen.queryByText('No one owes you in this group.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record payment' })).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when no one owes the user', () => {
     renderModal({ currentUser: 'Kayla' });
 
