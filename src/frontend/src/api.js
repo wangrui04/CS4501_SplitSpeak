@@ -139,3 +139,43 @@ export async function addGroupMember(groupId, name) {
     }),
   });
 }
+
+// Settle up (#46). Amounts are integer cents. Only the person being
+// paid can record a payment; expectedOutstandingCents is the amount
+// the form showed, so a stale form is rejected (409).
+export async function recordSettlement(
+  groupId,
+  { from, to, cents, expectedOutstandingCents },
+) {
+  return request(`/api/groups/${groupId}/settlements`, {
+    method: 'POST',
+    body: JSON.stringify({
+      from,
+      to,
+      cents,
+      expectedOutstandingCents,
+    }),
+  });
+}
+
+export async function fetchSettlements(groupId) {
+  return request(`/api/groups/${groupId}/settlements`);
+}
+
+// In-app reminder of what `to` currently owes the signed-in user.
+export async function sendReminder(groupId, to) {
+  return request(`/api/groups/${groupId}/reminders`, {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  });
+}
+
+export async function fetchNotifications() {
+  return request('/api/notifications');
+}
+
+export async function markNotificationRead(notificationId) {
+  return request(`/api/notifications/${notificationId}/read`, {
+    method: 'POST',
+  });
+}

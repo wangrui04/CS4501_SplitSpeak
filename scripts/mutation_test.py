@@ -86,6 +86,18 @@ MUTANTS = [
     ("T02", B + "pipeline.py", '    if any(not item.get("paidBy") or item["unitPrice"] is None for item in items):', '    if any(item["unitPrice"] is None for item in items):', "payer inferred when an item has no payer"),
     ("T03", B + "pipeline.py", "key=lambda name: (-totals[name], order.get(name, len(order)))", "key=lambda name: (totals[name], order.get(name, len(order)))", "main payer is whoever paid the least"),
     ("T04", B + "pipeline.py", '            name = current_user if item["paidBy"] == "ME" else item["paidBy"]', '            name = item["paidBy"]', "ME not resolved when inferring payer"),
+    # --- settle up and reminders (#46) ---
+    ("P01", B + "settle_up.py", "    if creditor != current_user:", "    if False:", "anyone can record a payment"),
+    ("P02", B + "settle_up.py", "        if payload.cents > owed:", "        if payload.cents > owed + 100:", "overpayment allowed"),
+    ("P03", B + "settle_up.py", "        if payload.expected_outstanding_cents != owed:", "        if False:", "stale or repeated submit accepted"),
+    ("P04", B + "settle_up.py", "    if payload.cents <= 0:", "    if payload.cents < 0:", "zero-cent payment allowed"),
+    ("P05", B + "settlement.py", '            "payments": [{"name": entry["from"], "cents": entry["cents"]}],\n            "shares": [{"name": entry["to"], "cents": entry["cents"]}],', '            "payments": [{"name": entry["to"], "cents": entry["cents"]}],\n            "shares": [{"name": entry["from"], "cents": entry["cents"]}],', "repayment applied in the wrong direction"),
+    ("P06", B + "settle_up.py", "        if recent:", "        if False:", "no reminder cooldown"),
+    ("P07", B + "settle_up.py", "    cutoff = sent_at - timedelta(minutes=REMINDER_COOLDOWN_MINUTES)", "    cutoff = sent_at - timedelta(minutes=REMINDER_COOLDOWN_MINUTES + 5)", "cooldown longer than 1 hour"),
+    ("P08", B + "settle_up.py", "    if owed == 0:\n        raise HTTPException(\n            status_code=400,\n            detail=\"You can only remind", "    if False:\n        raise HTTPException(\n            status_code=400,\n            detail=\"You can only remind", "remind someone who owes nothing"),
+    ("P09", B + "settle_up.py", "            WHERE id=? AND recipient=?", "            WHERE id=?", "anyone can mark a notification read"),
+    ("P10", B + "main.py", "            group_ledger(db, group_id),\n            result[\"members\"],", "            list_expenses(db, group_id),\n            result[\"members\"],", "group page ignores recorded payments"),
+    ("P11", B + "repository.py", "    nets = compute_nets(group_ledger(db, group_id), group[\"members\"])", "    nets = compute_nets(list_expenses(db, group_id), group[\"members\"])", "balances endpoint ignores recorded payments"),
     # --- frontend ---
     ("F01", F + "money.js", "  return Number(whole) * 100 + Number(fraction);", "  return Number(whole) * 10 + Number(fraction);", "frontend dollars->cents off"),
     ("F02", F + "money.js", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,2}))?$|^\\.(\\d{1,2})$/;", "const AMOUNT_PATTERN = /^(\\d+)(?:\\.(\\d{0,3}))?$|^\\.(\\d{1,3})$/;", "3 decimals accepted"),

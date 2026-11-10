@@ -1276,3 +1276,223 @@ h2.month {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Settle up and reminders (#46) */
+.settle-choices {
+  border: 0;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.settle-choices legend {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.settle-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.settle-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.settle-amount input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.settle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settle-preview {
+  background: #f4f7f6;
+  border-left: 3px solid #5bc5a7;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.settle-status {
+  color: #2e7d5b;
+  margin-top: 10px;
+}
+
+.settlement-history {
+  margin-top: 24px;
+}
+
+/* Line up with the expense rows above. */
+.settlement-history {
+  padding: 0 15px;
+}
+
+.settlement-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settlement-history li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.settlement-history li span {
+  flex: 1 1 100%;
+}
+
+/* Reminders popover, anchored under the header button */
+.reminders-anchor {
+  position: relative;
+}
+
+.reminders-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 50;
+  width: min(360px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  text-align: left;
+}
+
+/* Small arrow pointing at the button */
+.reminders-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 22px;
+  width: 12px;
+  height: 12px;
+  background: var(--teal);
+  transform: rotate(45deg);
+}
+
+.reminders-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--teal);
+  color: #fff;
+}
+
+.reminders-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.reminders-head .close {
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reminders-inbox ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.reminders-inbox li {
+  position: relative;
+  padding: 12px 14px 12px 28px;
+  border-bottom: 1px solid #eee;
+  color: var(--dark);
+}
+
+.reminders-inbox li:last-child {
+  border-bottom: 0;
+}
+
+.reminders-inbox li.unread::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+.reminders-inbox li p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.reminders-inbox li.unread p {
+  font-weight: 600;
+}
+
+.reminder-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #888;
+}
+
+.reminder-read {
+  color: #aaa;
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.reminders-empty {
+  margin: 0;
+  padding: 16px 14px;
+}
+
+.reminder-badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #ff652f;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}

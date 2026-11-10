@@ -1,5 +1,88 @@
 
 import sqlite3
+import threading
+
+
+class _Result:
+    """A query's rows, fetched while the lock was held.
+
+    Supports what the app uses from a cursor: fetchone, fetchall,
+    iteration, lastrowid, and rowcount.
+    """
+
+    def __init__(self, cursor):
+        self._rows = cursor.fetchall() if cursor.description else []
+        self._next = 0
+        self.lastrowid = cursor.lastrowid
+        self.rowcount = cursor.rowcount
+
+    def fetchone(self):
+        if self._next >= len(self._rows):
+            return None
+        row = self._rows[self._next]
+        self._next += 1
+        return row
+
+    def fetchall(self):
+        rows = self._rows[self._next:]
+        self._next = len(self._rows)
+        return rows
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+class LockedConnection:
+    """One SQLite connection shared safely across request threads.
+
+    FastAPI runs sync endpoints in a thread pool, and a plain sqlite3
+    connection must not be used by two threads at once. Every query
+    runs under a re-entrant lock, and `with db:` holds it for the
+    whole transaction, so a read-check-write sequence stays atomic and
+    lastrowid always belongs to the caller's own insert.
+    """
+
+    def __init__(self, connection):
+        self._connection = connection
+        self._lock = threading.RLock()
+
+    def execute(self, sql, parameters=()):
+        with self._lock:
+            return _Result(self._connection.execute(sql, parameters))
+
+    def executescript(self, script):
+        with self._lock:
+            self._connection.executescript(script)
+
+    def commit(self):
+        with self._lock:
+            self._connection.commit()
+
+    def rollback(self):
+        with self._lock:
+            self._connection.rollback()
+
+    def close(self):
+        with self._lock:
+            self._connection.close()
+
+    def __enter__(self):
+        self._lock.acquire()
+        try:
+            self._connection.__enter__()
+        except BaseException:
+            self._lock.release()
+            raise
+        return self
+
+    def __exit__(self, *exc_info):
+        try:
+            return self._connection.__exit__(*exc_info)
+        finally:
+            self._lock.release()
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
 
 
 def create_database(path=":memory:"):
@@ -50,6 +133,30 @@ def create_database(path=":memory:"):
             PRIMARY KEY(expense_id, name)
         );
 
+        -- A recorded repayment between two members. Stored apart from
+        -- expenses; no money moves.
+        CREATE TABLE IF NOT EXISTS settlements (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id),
+            from_name TEXT NOT NULL,
+            to_name TEXT NOT NULL,
+            cents INTEGER NOT NULL CHECK (cents > 0),
+            recorded_by TEXT NOT NULL,
+            recorded_at TEXT NOT NULL
+        );
+
+        -- In-app balance reminders. cents is the amount owed when sent.
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id),
+            sender TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            cents INTEGER NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            read_at TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY,
             group_id INTEGER NOT NULL REFERENCES groups(id),
@@ -70,7 +177,7 @@ def create_database(path=":memory:"):
         );
     """)
 
-    return db
+    return LockedConnection(db)
 
 
 def seed_database(db):

@@ -10,14 +10,19 @@ import ErrorMessage from './components/ErrorMessage';
 import NamePicker from './components/NamePicker';
 import AddExpenseModal from './components/AddExpenseModal';
 import GroupManagementModal from './components/GroupManagementModal';
+import SettleUpModal from './components/SettleUpModal';
+import RemindersInbox from './components/RemindersInbox';
 
 import {
   fetchGroups,
   fetchGroup,
   fetchGroupExpenses,
+  fetchNotifications,
   fetchSession,
+  fetchSettlements,
   login,
   logout,
+  markNotificationRead,
 } from './api';
 
 import './App.css';
@@ -37,6 +42,12 @@ export default function App() {
   const [isSwitchingUser, setIsSwitchingUser] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [groupModalMode, setGroupModalMode] = useState(null);
+
+  const [isSettleUpOpen, setIsSettleUpOpen] = useState(false);
+  // Tagged with its group so another group's list never shows.
+  const [settlements, setSettlements] = useState({ groupId: null, list: [] });
+  const [notifications, setNotifications] = useState([]);
+  const [isRemindersOpen, setIsRemindersOpen] = useState(false);
 
   const loadUserGroups = useCallback(async () => {
     setError(null);
@@ -170,6 +181,68 @@ export default function App() {
     };
   }, [selectedGroupId, currentUser, refreshKey]);
 
+  // Payment history and reminders load separately from the group, so
+  // a failure here never blanks the group page.
+  useEffect(() => {
+    // Signing out clears this list; GroupView ignores a stale one.
+    if (!selectedGroupId || !currentUser) return undefined;
+
+    let isMounted = true;
+
+    Promise.resolve()
+      .then(() => fetchSettlements(selectedGroupId))
+      .then((list) => {
+        if (isMounted) {
+          setSettlements({ groupId: selectedGroupId, list: list || [] });
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setSettlements({ groupId: selectedGroupId, list: [] });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGroupId, currentUser, refreshKey]);
+
+  useEffect(() => {
+    // Signing out clears the inbox.
+    if (!currentUser) return undefined;
+
+    let isMounted = true;
+
+    Promise.resolve()
+      .then(() => fetchNotifications())
+      .then((list) => {
+        if (isMounted) setNotifications(list || []);
+      })
+      .catch(() => {
+        if (isMounted) setNotifications([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, refreshKey]);
+
+  const handleMarkRead = async (notificationId) => {
+    try {
+      await markNotificationRead(notificationId);
+      const readAt = new Date().toISOString();
+      setNotifications((previous) =>
+        previous.map((note) =>
+          note.id === notificationId ? { ...note, readAt } : note
+        )
+      );
+    } catch {
+      // Leave it unread; the button stays available.
+    }
+  };
+
+  const closeReminders = useCallback(() => setIsRemindersOpen(false), []);
+
   const handleLogin = async (name) => {
     const session = await login(name);
 
@@ -196,6 +269,10 @@ export default function App() {
     setIsSwitchingUser(false);
     setIsAddExpenseOpen(false);
     setGroupModalMode(null);
+    setIsSettleUpOpen(false);
+    setIsRemindersOpen(false);
+    setSettlements({ groupId: null, list: [] });
+    setNotifications([]);
     setError(null);
   };
 
@@ -249,6 +326,24 @@ export default function App() {
         onSignOut={
           currentUser ? handleLogout : undefined
         }
+        unreadReminders={
+          notifications.filter((note) => !note.readAt).length
+        }
+        onOpenReminders={
+          currentUser
+            ? () => setIsRemindersOpen((open) => !open)
+            : undefined
+        }
+        onCloseReminders={closeReminders}
+        remindersPanel={
+          currentUser && isRemindersOpen ? (
+            <RemindersInbox
+              notifications={notifications}
+              onMarkRead={handleMarkRead}
+              onClose={closeReminders}
+            />
+          ) : null
+        }
       />
 
       {loading ? (
@@ -297,6 +392,13 @@ export default function App() {
               onAddMember={() =>
                 setGroupModalMode('add-member')
               }
+              onSettleUp={() => setIsSettleUpOpen(true)}
+              settlements={
+                details?.id === selectedGroupId &&
+                settlements.groupId === selectedGroupId
+                  ? settlements.list
+                  : undefined
+              }
             />
 
             <RightSidebar
@@ -322,7 +424,26 @@ export default function App() {
             />
           )}
 
-          {groupModalMode && (
+          {isSettleUpOpen && (
+            <SettleUpModal
+              isOpen={isSettleUpOpen}
+              onClose={() => setIsSettleUpOpen(false)}
+              group={
+                activeGroup && {
+                  ...activeGroup,
+                  // Undefined until loaded, so the dialog can say so.
+                  transfers:
+                    details?.id === selectedGroupId
+                      ? details.transfers || []
+                      : undefined,
+                }
+              }
+              currentUser={currentUser}
+              onRecorded={() => setRefreshKey((key) => key + 1)}
+            />
+          )}
+
+                    {groupModalMode && (
             <GroupManagementModal
               mode={groupModalMode}
               group={activeGroup}

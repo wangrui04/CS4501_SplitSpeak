@@ -1,5 +1,6 @@
 
 import { formatCents } from '../money';
+import SettlementHistory from './SettlementHistory';
 
 const EMPTY_SUMMARY = {
   totalBalance: 0,
@@ -129,6 +130,7 @@ export default function GroupView({
   onAddExpense,
   onSettleUp,
   onAddMember,
+  settlements,
 }) {
   if (!group) {
     return (
@@ -288,6 +290,8 @@ export default function GroupView({
           ))
         )}
       </section>
+
+      {settlements && <SettlementHistory settlements={settlements} />}
     </main>
   );
 }

@@ -19,11 +19,13 @@ from backend.repository import (
     list_conversations,
     confirm_conversation_expense,
     get_group_balances,
+    group_ledger,
     list_expenses,
     save_expense,
 )
 from backend.manual import ManualEntryError, build_manual_expense
 from backend.group_management import router as group_management_router
+from backend.settle_up import router as settle_up_router
 from backend.config import (
     CHAT_RATE_LIMIT_PER_MINUTE,
     DEFAULT_GEMINI_MODEL,
@@ -219,6 +221,8 @@ def create_app(
 
     # Group creation and membership routes.
     app.include_router(group_management_router)
+    # Recorded repayments and in-app reminders (#46).
+    app.include_router(settle_up_router)
 
     def member_group_or_error(group_id, request):
         group_data = get_group(db, group_id)
@@ -242,7 +246,7 @@ def create_app(
         result = member_group_or_error(group_id, request)
 
         settlement = compute_settlement(
-            list_expenses(db, group_id),
+            group_ledger(db, group_id),
             result["members"],
         )
 
