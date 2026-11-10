@@ -16,6 +16,8 @@ LLM_TIMEOUT_SECONDS = 60.0
 LLM_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 MAX_PROMPTS_PER_CONVERSATION = 5
+# Minimum time between reminders from one member to another in a group.
+REMINDER_COOLDOWN_MINUTES = 60
 
 CHAT_RATE_LIMIT_PER_MINUTE = 20
 MAX_MESSAGE_LENGTH = 1000

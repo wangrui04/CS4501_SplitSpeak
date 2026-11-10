@@ -256,8 +256,9 @@ def test_no_outstanding_transfer_rejected(app, db):
     kayla_owes_sarah(db)
     sarah = client_as(app, "Sarah")
 
-    # Rui owes Sarah nothing.
-    assert record(sarah, 500, frm="Rui", shown=500).status_code == 400
+    # Rui owes Sarah nothing, and the form shows that. (A form that
+    # still showed an old amount gets 409; see the stale tests.)
+    assert record(sarah, 500, frm="Rui", shown=0).status_code == 400
 
 
 def test_payer_must_differ_from_recipient(app, db):

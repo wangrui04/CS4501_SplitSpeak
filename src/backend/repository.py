@@ -1,7 +1,7 @@
 
 import json
 
-from backend.settlement import compute_nets
+from backend.settlement import compute_nets, settlement_entries
 
 
 def list_groups(db):
@@ -214,12 +214,43 @@ def list_expenses(db, group_id):
     return result
 
 
+def list_settlements(db, group_id):
+    rows = db.execute(
+        """
+        SELECT * FROM settlements
+        WHERE group_id=?
+        ORDER BY id
+        """,
+        (group_id,),
+    ).fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "groupId": row["group_id"],
+            "from": row["from_name"],
+            "to": row["to_name"],
+            "cents": row["cents"],
+            "recordedBy": row["recorded_by"],
+            "recordedAt": row["recorded_at"],
+        }
+        for row in rows
+    ]
+
+
+def group_ledger(db, group_id):
+    """Expenses plus recorded repayments, for net and transfer math."""
+    return list_expenses(db, group_id) + settlement_entries(
+        list_settlements(db, group_id)
+    )
+
+
 def get_group_balances(db, group_id):
     group = get_group(db, group_id)
     if group is None:
         return None
 
-    nets = compute_nets(list_expenses(db, group_id), group["members"])
+    nets = compute_nets(group_ledger(db, group_id), group["members"])
 
     return {
         member: nets.get(member, 0)

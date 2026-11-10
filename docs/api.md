@@ -37,6 +37,7 @@ Returns the group plus settlement relative to the signed-in user.
 - Transfers are greedy: the largest debtor pays the largest creditor, with ties broken by roster order. This produces at most n − 1 transfers.
 - `balances[].cents` is positive when that member owes you and negative when you owe them. `status` is `owes you`, `you owe`, or `settled up`. Someone who settles with a third person shows as `settled up` relative to you.
 - `summary.totalBalance` is your net; `youOwe` and `youAreOwed` sum your transfers.
+- Recorded repayments (see [Settle up](#settle-up)) count toward nets and transfers. Expenses are never changed.
 
 ### `GET /api/groups/:id/expenses`
 
@@ -44,7 +45,49 @@ Confirmed expenses, newest first. Each expense has `description`, `payer`, `tota
 
 ### `GET /api/groups/:id/balances`
 
-Legacy map of each member's net, e.g. `{ "Sarah": 2000, "Kayla": -1000 }`.
+Legacy map of each member's net, including recorded repayments, e.g. `{ "Sarah": 2000, "Kayla": -1000 }`.
+
+---
+
+## Settle up
+
+Records repayments and sends in-app reminders. No money moves: SplitSpeak only records that a payment happened.
+
+### `POST /api/groups/:id/settlements`
+
+Records that `from` repaid `to`. Only the person being paid (`to`) can record it.
+
+```json
+{ "from": "Kayla", "to": "Sarah", "cents": 1000, "expectedOutstandingCents": 3000 }
+```
+
+`expectedOutstandingCents` is the amount the form showed. Returns `201` with the saved entry (`id`, `from`, `to`, `cents`, `recordedBy`, `recordedAt`) and `remainingCents`.
+
+| Problem | Response |
+| --- | --- |
+| Not signed in | `401` |
+| Not a member, or not the person being paid | `403` |
+| Unknown member, same person, nothing owed, `cents` not positive, or more than is owed | `400` |
+| `cents` or `expectedOutstandingCents` not an integer | `422` |
+| `expectedOutstandingCents` differs from the live amount (stale form or repeated submit) | `409` |
+
+The amount owed is the current transfer from `from` to `to` in `GET /api/groups/:id`. With simplified debts, that can differ from who paid the original expense.
+
+### `GET /api/groups/:id/settlements`
+
+Recorded repayments, newest first.
+
+### `POST /api/groups/:id/reminders`
+
+`{ "to": "Kayla" }` sends Kayla an in-app reminder of what she currently owes the signed-in user, for example: "Hi Kayla, just a reminder that you still owe Sarah $12.00 for Apartment 4B. Thanks!" Returns `201`. Returns `400` unless `to` currently owes you, and `429` if you reminded that person in this group within the last 60 minutes (`REMINDER_COOLDOWN_MINUTES`). Reminders never change balances, and nothing is sent by email or SMS.
+
+### `GET /api/notifications`
+
+The signed-in user's reminders, newest first: `id`, `groupId`, `from`, `to`, `cents` (amount when sent), `message`, `createdAt`, and `readAt` (`null` until read).
+
+### `POST /api/notifications/:id/read`
+
+Marks one of your reminders as read. Returns `404` for anyone else's.
 
 ---
 

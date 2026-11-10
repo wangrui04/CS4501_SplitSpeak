@@ -104,4 +104,16 @@ def member_balances(
 
 
 def settlement_entries(settlements: list[dict]) -> list[dict]:
-    raise NotImplementedError
+    """Recorded repayments as ledger entries for compute_nets.
+
+    A repayment of X from debtor to creditor counts as the debtor
+    paying X and the creditor taking a share of X: the debtor's net
+    rises by X and the creditor's falls by X. Expenses are untouched.
+    """
+    return [
+        {
+            "payments": [{"name": entry["from"], "cents": entry["cents"]}],
+            "shares": [{"name": entry["to"], "cents": entry["cents"]}],
+        }
+        for entry in settlements
+    ]

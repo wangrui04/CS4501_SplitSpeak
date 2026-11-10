@@ -50,6 +50,30 @@ def create_database(path=":memory:"):
             PRIMARY KEY(expense_id, name)
         );
 
+        -- A recorded repayment between two members. Stored apart from
+        -- expenses; no money moves.
+        CREATE TABLE IF NOT EXISTS settlements (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id),
+            from_name TEXT NOT NULL,
+            to_name TEXT NOT NULL,
+            cents INTEGER NOT NULL CHECK (cents > 0),
+            recorded_by TEXT NOT NULL,
+            recorded_at TEXT NOT NULL
+        );
+
+        -- In-app balance reminders. cents is the amount owed when sent.
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id),
+            sender TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            cents INTEGER NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            read_at TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY,
             group_id INTEGER NOT NULL REFERENCES groups(id),
