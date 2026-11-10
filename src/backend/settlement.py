@@ -101,3 +101,7 @@ def member_balances(
             "youAreOwed": sum(b["cents"] for b in balances if b["cents"] > 0),
         },
     }
+
+
+def settlement_entries(settlements: list[dict]) -> list[dict]:
+    raise NotImplementedError
