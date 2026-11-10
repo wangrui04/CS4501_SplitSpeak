@@ -116,6 +116,53 @@ describe('#46: Settle up on the group page', () => {
     await waitFor(() => expect(markRead).toHaveBeenCalledWith(5));
   });
 
+  it('opens reminders as a popover from the header button', async () => {
+    signInAs('Kayla', { notifications: [reminder] });
+    vi.spyOn(api, 'fetchGroup').mockResolvedValue(details(0));
+    render(<App />);
+
+    const button = await screen.findByRole('button', { name: 'Reminders (1 unread)' });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(button);
+
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    const inbox = screen.getByRole('region', { name: 'Reminders' });
+    expect(within(inbox).getByRole('button', { name: 'Close reminders' })).toBeInTheDocument();
+  });
+
+  it('closes the reminders popover with Escape, the close button, or a click outside', async () => {
+    signInAs('Kayla', { notifications: [reminder] });
+    vi.spyOn(api, 'fetchGroup').mockResolvedValue(details(0));
+    render(<App />);
+    const button = await screen.findByRole('button', { name: 'Reminders (1 unread)' });
+
+    fireEvent.click(button);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Reminders' })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: 'Close reminders' }));
+    expect(screen.queryByRole('region', { name: 'Reminders' })).not.toBeInTheDocument();
+
+    fireEvent.click(button);
+    fireEvent.mouseDown(screen.getByRole('heading', { level: 1, name: 'Apartment 4B' }));
+    expect(screen.queryByRole('region', { name: 'Reminders' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the popover open when clicking inside it', async () => {
+    signInAs('Kayla', { notifications: [reminder] });
+    vi.spyOn(api, 'fetchGroup').mockResolvedValue(details(0));
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reminders (1 unread)' }));
+    const inbox = screen.getByRole('region', { name: 'Reminders' });
+    fireEvent.mouseDown(within(inbox).getByText(/you still owe Sarah/));
+
+    expect(screen.getByRole('region', { name: 'Reminders' })).toBeInTheDocument();
+  });
+
   it('still loads the page if reminders cannot be fetched', async () => {
     signInAs('Sarah');
     vi.spyOn(api, 'fetchNotifications').mockRejectedValue(new Error('offline'));
