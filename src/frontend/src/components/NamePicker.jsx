@@ -69,12 +69,12 @@ export default function NamePicker({
     <div
       className={`name-picker-card ${isModal ? 'modal' : 'standalone'}`}
       role={isModal ? 'dialog' : 'region'}
-      aria-label={isModal ? 'Switch user' : 'Sign in to Splitwise'}
+      aria-label={isModal ? 'Switch user' : 'Sign in to SplitSpeak'}
     >
       <div className="name-picker-header">
         <div className="name-picker-brand">
           <span className="logo" aria-hidden="true">✓</span>
-          <h2>{isModal ? 'Switch User' : 'Sign in to Splitwise'}</h2>
+          <h2>{isModal ? 'Switch User' : 'Sign in to SplitSpeak'}</h2>
         </div>
         {isModal && onCancel && (
           <button

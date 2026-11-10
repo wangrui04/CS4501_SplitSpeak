@@ -126,7 +126,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
 
       // Top brand and logged in user
       await waitFor(() => {
-        expect(screen.getByText('splitwise')).toBeInTheDocument();
+        expect(screen.getByText('SplitSpeak')).toBeInTheDocument();
       });
       expect(screen.getByLabelText('Current user')).toHaveTextContent('Sarah');
 
@@ -280,7 +280,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
 
       // Returns to name-picker screen
       await waitFor(() => {
-        expect(screen.getByRole('region', { name: /sign in to splitwise/i })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: /sign in to splitspeak/i })).toBeInTheDocument();
       });
     });
 
@@ -349,7 +349,7 @@ describe('ALPHA-15: Scaffold React Application', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(screen.queryByRole('region', { name: /sign in to splitwise/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: /sign in to splitspeak/i })).not.toBeInTheDocument();
         expect(screen.getByLabelText('Current user')).toHaveTextContent('Sarah');
       });
     });

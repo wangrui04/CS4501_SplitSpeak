@@ -19,7 +19,8 @@ describe('Reusable Components', () => {
         onSignOut={handleSignOut}
       />
     );
-    expect(screen.getByText('splitwise')).toBeInTheDocument();
+    expect(screen.getByText('SplitSpeak')).toBeInTheDocument();
+    expect(screen.queryByText(/splitwise/i)).not.toBeInTheDocument();
     expect(screen.getByText('Kayla')).toBeInTheDocument();
     expect(screen.getByText('K')).toBeInTheDocument();
 
