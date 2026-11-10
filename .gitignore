@@ -19,3 +19,7 @@ src/frontend/dist/
 
 # Mutation test output
 scripts/mutation_results.json
+
+# Coverage testing
+src/frontend/coverage/
+.coverage
