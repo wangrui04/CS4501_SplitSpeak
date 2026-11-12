@@ -33,20 +33,27 @@ def parsed(items, payer="ME", total=None):
     }
 
 
+US01_TEXT = "I paid $30 for dinner, split evenly."
+US02_TEXT = "I paid $24 for groceries for everyone except me."
+NACHOS_TEXT = "I paid. Kayla and I shared nachos for $16"
+
+
 def us01():
-    # "I paid $30 for dinner, split evenly."
+    # US01_TEXT
     return parsed([item("Dinner", "30.00", "all", [])], total="30.00")
 
 
 def us02():
-    # "I paid $24 for groceries for everyone except me."
+    # US02_TEXT
     return parsed([item("Groceries", "24.00", "all_except", ["ME"])])
 
 
-def run(raw, current_user):
+def run(raw, current_user, text):
+    # The text must state what the fake LLM returns, or the grounding
+    # checks (#49) ask instead of previewing.
     return parse_turn(
         llm=FakeLlmClient([raw]),
-        conversation=[{"role": "user", "content": "..."}],
+        conversation=[{"role": "user", "content": text}],
         roster=ROSTER,
         current_user=current_user,
     )
@@ -58,21 +65,21 @@ def shares(result):
 
 @pytest.mark.parametrize("user", ROSTER)
 def test_me_payer_resolves_to_each_signed_in_user(user):
-    result = run(us01(), user)
+    result = run(us01(), user, US01_TEXT)
 
     assert result["type"] == "preview"
     assert result["preview"]["payer"] == user
 
 
 def test_us01_as_kayla_shares_unchanged():
-    result = run(us01(), "Kayla")
+    result = run(us01(), "Kayla", US01_TEXT)
 
     assert result["preview"]["payer"] == "Kayla"
     assert shares(result) == {"Sarah": 1000, "Kayla": 1000, "Rui": 1000}
 
 
 def test_us02_as_rui():
-    result = run(us02(), "Rui")
+    result = run(us02(), "Rui", US02_TEXT)
 
     assert result["preview"]["payer"] == "Rui"
     assert shares(result) == {"Sarah": 1200, "Kayla": 1200, "Rui": 0}
@@ -83,6 +90,7 @@ def test_me_participant_resolves_to_each_user(user):
     result = run(
         parsed([item("Nachos", "12.00", "only", ["ME"])], payer="Sarah"),
         user,
+        "Sarah paid $12 for my nachos.",
     )
 
     assert shares(result)[user] == 1200
@@ -92,6 +100,7 @@ def test_kayla_and_i_as_kayla_asks_instead_of_guessing():
     result = run(
         parsed([item("Nachos", "16.00", "only", ["Kayla", "ME"])]),
         "Kayla",
+        NACHOS_TEXT,
     )
 
     assert result["type"] == "question"
@@ -102,6 +111,7 @@ def test_payer_named_and_me_is_fine_when_different_people():
     result = run(
         parsed([item("Nachos", "16.00", "only", ["Kayla", "ME"])]),
         "Sarah",
+        NACHOS_TEXT,
     )
 
     assert result["type"] == "preview"

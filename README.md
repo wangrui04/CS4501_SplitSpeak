@@ -154,6 +154,7 @@ CS4501_Splitwise/
 │   │   ├── schemas.py
 │   │   ├── allocation.py
 │   │   ├── validator.py
+│   │   ├── grounding.py     # checks the LLM's reading against the user's text
 │   │   ├── database.py
 │   │   ├── repository.py
 │   │   ├── config.py        # model, prompt, limits
@@ -181,6 +182,7 @@ CS4501_Splitwise/
 │       ├── test_setup.py
 │       ├── test_expense.py
 │       ├── test_validator.py
+│       ├── test_grounding.py
 │       ├── test_backend.py
 │       └── test_llm.py
 │
@@ -264,6 +266,14 @@ Validation includes checking that:
 - Required information is present.
 
 Invalid expenses are rejected rather than permanently stored.
+
+Before calculating anything, the backend also checks the LLM's reading against what the user actually typed (`src/backend/grounding.py`). These checks are plain code with no second LLM call:
+
+- A payer, or a per-item payer, is kept only if the user tied that person to a payment word ("I paid", "Alex covered it", "paid by Sam"). Otherwise the app asks "Who paid for this expense?".
+- Every item price, refund, and tax/tip/fee amount or percent must appear as a number in the user's messages. Otherwise the app asks how much it was.
+- If the user mentions tax, tip, or a fee that the LLM dropped, and did not say it was included or that there was none, the app asks how to handle it.
+
+A failed check only asks a question. It never changes an amount or saves anything. The word lists live in `src/backend/config.py`.
 
 ### 5. Expense Preview and Confirmation
 
@@ -406,6 +416,7 @@ Results are written to `src/benchmark/results/<timestamp>.json`. Add `--include-
 | `test_trip_allocation.py` | Weighted splits, per-item payers, refunds, pooled tax/tip |
 | `test_settlement.py` | Net settlement (benchmark keys as vectors) and group balances API |
 | `test_validator.py` | Validation of expense data and allocations |
+| `test_grounding.py` | Payer, amount, and tax/tip checks against the user's own text |
 | `test_backend.py` | Database, persistence, groups, sessions, and API endpoints |
 | `test_manual_entry.py` | Manual-entry endpoint |
 | `test_security.py` | Rate limiting, prompt-injection hardening, CORS, headers, redaction |

@@ -194,7 +194,7 @@ def test_same_extraction_gives_same_preview_as_claude():
     previews = [
         parse_turn(
             llm=llm,
-            conversation=[{"role": "user", "content": "dinner 10"}],
+            conversation=[{"role": "user", "content": "i paid 10 for dinner"}],
             roster=ROSTER,
             current_user="Sarah",
         )

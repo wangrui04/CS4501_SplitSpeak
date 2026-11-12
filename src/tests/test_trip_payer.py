@@ -10,6 +10,12 @@ from backend.pipeline import parse_turn
 
 
 ROSTER = ["Sarah", "Kayla", "Rui"]
+# States every payer and price the fake LLM returns, so the grounding
+# checks (#49) pass. Nights are 3 / 3 / 1.
+TRIP_TEXT = (
+    "trip with rui and kayla. i paid 840 for the house, rui paid 120 for "
+    "groceries and kayla paid 90 for transportation"
+)
 
 
 def item(name, price, names=(), mode="only", **extra):
@@ -48,7 +54,7 @@ def parsed(items, payer=None, charges=()):
 def run(raw):
     return parse_turn(
         llm=FakeLlmClient([raw]),
-        conversation=[{"role": "user", "content": "trip"}],
+        conversation=[{"role": "user", "content": TRIP_TEXT}],
         roster=ROSTER,
         current_user="Sarah",
     )
