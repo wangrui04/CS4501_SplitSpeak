@@ -18,7 +18,7 @@ PY = [str(ROOT / ".venv/bin/python"), "-m", "pytest", "-q", "-p", "no:cacheprovi
 FE = ["npx", "vitest", "run"]
 
 B = "src/backend/"
-F = "src/frontend/src/"
+F = "src/frontend/app/"
 
 # (id, file, original snippet, mutated snippet, what it breaks)
 MUTANTS = [

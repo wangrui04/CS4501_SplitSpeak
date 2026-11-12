@@ -98,6 +98,18 @@ export async function fetchGroupExpenses(id) {
   return request(`/api/groups/${id}/expenses`);
 }
 
+
+export async function fetchExpenseDetails(groupId, expenseId) {
+  return request(`/api/groups/${groupId}/expenses/${expenseId}`);
+}
+
+export async function updateExpense(groupId, expenseId, payload) {
+  return request(`/api/groups/${groupId}/expenses/${expenseId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 // Send the amount as a string for exact parsing.
 export async function createManualExpense(
   groupId,
