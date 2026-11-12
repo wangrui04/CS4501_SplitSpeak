@@ -15,6 +15,12 @@ from backend.allocation import (
     MissingChargeAmountError,
     WeightsMismatchError,
 )
+from backend.grounding import (
+    amount_question,
+    charge_question,
+    ground_payers,
+    user_texts,
+)
 from backend.settlement import compute_settlement
 from backend.validator import validate, question_for_error
 
@@ -86,6 +92,11 @@ def parse_turn(*, llm, conversation, roster, current_user):
             "question": data["openQuestions"][0]["question"],
         }
 
+    # Issue #49: don't trust the LLM's payer or amounts on their own.
+    # Clear any payer the user never stated, so "Who paid?" is asked.
+    texts = user_texts(conversation)
+    data, _ = ground_payers(data, texts, current_user)
+
     payer = (
         current_user
         if data["payer"] == "ME"
@@ -110,6 +121,10 @@ def parse_turn(*, llm, conversation, roster, current_user):
                 f"Unknown member {payer}. Who paid?"
             ),
         }
+
+    grounding_question = amount_question(data, texts) or charge_question(data, texts)
+    if grounding_question:
+        return {"type": "question", "question": grounding_question}
 
     for item in data["items"]:
         if item["unitPrice"] is None:

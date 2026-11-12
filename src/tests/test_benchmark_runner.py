@@ -91,14 +91,17 @@ def test_b1_preview_after_turn_one_is_done_in_one_prompt():
 
 
 def test_if_asked_turn_not_sent_after_a_preview():
-    # If the bot previews B2 right away, turn 2 (if_asked) is skipped.
-    llm = FakeLlmClient([turn_fixture("B2", 1)])
+    # If the bot previews B4 right away, turn 2 (if_asked) is skipped.
+    # B4's first message states every payer and price, so the final
+    # extraction passes the grounding checks (#49) on turn 1. (B2's
+    # turn 1 never says who paid, so it now correctly asks first.)
+    llm = FakeLlmClient([turn_fixture("B4", 1)])
 
-    result = run_scenario(OFFICIAL["B2"], llm)
+    result = run_scenario(OFFICIAL["B4"], llm)
 
     assert len(llm.calls) == 1
     assert result.promptCount == 1
-    assert result.behaviorOk is False  # B2 should have asked first
+    assert result.behaviorOk is False  # B4 should have asked first
 
 
 def test_b5_always_correction_sent_after_preview():
@@ -137,7 +140,9 @@ def test_unresolved_response_fails_the_run():
 
 def test_wrong_split_reports_mismatch():
     wrong = json.loads(json.dumps(turn_fixture("B1", 0)))
-    wrong["items"][0]["unitPrice"] = "95.00"
+    # A misread the grounding checks (#49) can't catch: 96 was typed, but
+    # the model read two dinners instead of one.
+    wrong["items"][0]["quantity"] = 2
     wrong["statedTotal"] = None
 
     result = run_scenario(OFFICIAL["B1"], FakeLlmClient([wrong]))

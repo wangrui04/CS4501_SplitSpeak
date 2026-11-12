@@ -158,7 +158,7 @@ def test_manual_and_ai_store_identical_shares(db):
     client = signed_in(db, llm=FakeLlmClient([ai_expense]))
 
     chat = client.post(
-        "/api/chat", json={"groupId": 1, "message": "dinner 10"}
+        "/api/chat", json={"groupId": 1, "message": "i paid 10 for dinner"}
     ).json()
     client.post(f"/api/conversations/{chat['conversationId']}/confirm")
     client.post(URL, json=payload(amount="10.00"))

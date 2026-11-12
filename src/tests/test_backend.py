@@ -894,7 +894,7 @@ def test_stale_preview_cannot_be_confirmed_after_followup_question(db):
         group_id = get_apartment(db)["id"]
 
         first = test_client.post(
-            "/api/chat", json={"groupId": group_id, "message": "dinner 30"}
+            "/api/chat", json={"groupId": group_id, "message": "i paid 30 for dinner"}
         ).json()
         assert first["type"] == "preview"
 

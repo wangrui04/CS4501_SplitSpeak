@@ -358,7 +358,10 @@ def test_chat_preview_includes_paid_and_settlement_then_confirm(db):
     client.post("/api/session", json={"name": "Sarah"})
 
     body = client.post(
-        "/api/chat", json={"groupId": 1, "message": "trip"}
+        "/api/chat", json={"groupId": 1, "message": (
+            "i paid 840 for the house, rui paid 120 for groceries and "
+            "kayla paid 90 for transportation"
+        )}
     ).json()
     preview = body["preview"]
 

@@ -319,7 +319,7 @@ def test_pipeline_asks_for_missing_price():
 
     result = parse_turn(
         llm=fake,
-        conversation=[user_message("We shared pizza")],
+        conversation=[user_message("Sarah paid for the pizza we shared")],
         roster=ROSTER,
         current_user="Sarah",
     )
@@ -340,7 +340,7 @@ def test_pipeline_asks_about_unknown_name():
     result = parse_turn(
         llm=fake,
         conversation=[
-            user_message("Ben and I shared dinner")
+            user_message("Sarah paid $30. Ben and I shared dinner")
         ],
         roster=ROSTER,
         current_user="Sarah",

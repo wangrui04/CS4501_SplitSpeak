@@ -91,3 +91,98 @@ Sam. Is that right, and are these the final amounts?"
 you stated it, applying any specific changes they mention. Only items \
 the user changes are different.
 """
+
+# --- Grounding checks (issue #49) ---------------------------------------
+# Deterministic checks of the LLM's payer and amounts against the user's
+# own words. Plain words and phrases; backend/grounding.py builds the
+# regular expressions. Generic on purpose: never copy benchmark phrasing.
+
+# Words that say someone paid, written after the person ("Alex covered it").
+# Past or progressive only: "Alex will pay" is a plan, not a payment.
+# "paid me back" is excluded in code.
+GROUNDING_PAYMENT_WORDS = (
+    "paid",
+    "paying",
+    "covered",
+    "covering",
+    "bought",
+    "treated",
+    "fronted",
+    "picked up",
+    "got the bill",
+    "got the check",
+    "got the tab",
+    "grabbed the bill",
+    "grabbed the check",
+    "grabbed the tab",
+    "put it on",
+    "charged it",
+)
+# Words that say someone paid, written before the person ("paid by Alex").
+GROUNDING_PAYMENT_BY_WORDS = (
+    "paid by",
+    "covered by",
+    "bought by",
+    "picked up by",
+    "charged to",
+)
+# Words allowed between a person and a payment word ("Alex already paid",
+# "I'm the one who paid"). Anything else breaks the link.
+GROUNDING_PAYER_FILLER_WORDS = (
+    "already",
+    "also",
+    "just",
+    "actually",
+    "originally",
+    "then",
+    "was",
+    "is",
+    "am",
+    "the",
+    "one",
+    "who",
+    "that",
+    "had",
+    "has",
+    "have",
+    "will",
+    "did",
+    "ended",
+    "up",
+)
+# How the signed-in user refers to themselves.
+GROUNDING_FIRST_PERSON_WORDS = (
+    "i",
+    "me",
+    "im",
+    "i'm",
+    "ive",
+    "i've",
+    "myself",
+    "i'd",
+    "i'll",
+)
+
+# Words for each charge kind, used to notice a charge the LLM dropped.
+GROUNDING_CHARGE_WORDS = {
+    "tax": ("tax", "taxes"),
+    "tip": ("tip", "tips", "tipped", "gratuity"),
+    "fee": ("fee", "fees", "service charge"),
+}
+# Before a charge word: the charge is already in the price ("with tax").
+GROUNDING_INCLUDED_WORDS = (
+    "including",
+    "includes",
+    "include",
+    "incl",
+    "inclusive of",
+    "with",
+    "w",
+    "after",
+)
+# Before a charge word: there was no such charge ("no tip").
+GROUNDING_NONE_WORDS = ("no", "without", "zero", "didnt", "didn't", "never", "skipped")
+# After a charge word: included or none ("tax included", "tax free").
+GROUNDING_COVERED_AFTER_WORDS = ("included", "incl", "inclusive", "free", "waived")
+# How many other words may sit between a covering word and the charge word.
+GROUNDING_COVER_WINDOW_WORDS = 3
