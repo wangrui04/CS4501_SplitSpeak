@@ -271,6 +271,7 @@ Before calculating anything, the backend also checks the LLM's reading against w
 
 - A payer, or a per-item payer, is kept only if the user tied that person to a payment word ("I paid", "Alex covered it", "paid by Sam"). Otherwise the app asks "Who paid for this expense?".
 - Every item price, refund, and tax/tip/fee amount or percent must appear as a number in the user's messages. Otherwise the app asks how much it was.
+- The AI quotes the user's exact words behind each item's price and payer and each charge's amount. A word-for-word quote that contradicts its value (a tax quoted as "tip 18", or "Rui bought a $20 pizza" as the payer of the $10 one) makes the app ask instead. A paraphrased quote is ignored, and the checks above still apply.
 - If the user says someone paid ("Sarah paid for a pizza") but the LLM's reading has them paying for nothing, the app asks what that person paid for, once.
 - If the user mentions tax, tip, or a fee that the LLM dropped, and did not say it was included or that there was none, the app asks how to handle it.
 

@@ -23,6 +23,8 @@ from backend.grounding import (
     amount_question,
     charge_question,
     dropped_payer_question,
+    evidence_question,
+    ground_payer_evidence,
     ground_payers,
     item_labels,
     payer_answers,
@@ -184,6 +186,8 @@ def _parse_once(*, llm, conversation, roster, current_user):
     texts = user_texts(conversation)
     answers = payer_answers(conversation, roster, current_user)
     data, _ = ground_payers(data, texts, current_user, answers)
+    # Issue #55: a per-item payer whose own quote contradicts it.
+    data, _ = ground_payer_evidence(data, texts, current_user)
 
     payer = (
         current_user
@@ -212,6 +216,7 @@ def _parse_once(*, llm, conversation, roster, current_user):
 
     grounding_question = (
         dropped_payer_question(data, conversation, roster, current_user)
+        or evidence_question(data, texts)
         or amount_question(data, texts)
         or charge_question(data, texts)
     )

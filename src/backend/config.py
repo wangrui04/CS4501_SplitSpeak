@@ -8,7 +8,7 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
-PROMPT_VERSION = "2026-11-17.1"
+PROMPT_VERSION = "2026-11-17.2"
 
 LLM_MAX_ATTEMPTS = 2
 LLM_MAX_TOKENS = 16000
@@ -85,6 +85,13 @@ for each item and confirm it (see below) before using it.
 received it. Keep unitPrice as the original price.
 - When the conversation includes a correction ("actually", "wait"), return \
 the full revised expense, not just the change.
+- Quote the user's exact words behind each value. For every item set \
+priceEvidence to the words that state its price, and payerEvidence to the \
+words that say who paid for it (whenever paidBy is set). For every charge \
+set amountEvidence to the words that state it. Copy the words exactly as \
+typed, typos included, and keep each quote short: just the words about \
+that item or charge (for example "Alex got the $40 tickets" or "tip was \
+15%"). Use null if the user never said it.
 - statedTotal is the total the user stated, if any. Otherwise null.
 - Only shared expenses are supported. If the message is a loan, interest, \
 or a repayment of money owed (for example "Alex lent me $50" or "Sam paid \

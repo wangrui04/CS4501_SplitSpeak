@@ -410,7 +410,8 @@
           "participants": {
             "mode": "all",
             "names": []
-          }
+          },
+          "priceEvidence": "96 total"
         }
       ],
       "charges": [],
@@ -477,7 +478,8 @@
             "names": [
               "Rui"
             ]
-          }
+          },
+          "priceEvidence": "ruis meal was 18"
         },
         {
           "name": "Sarah meal",
@@ -488,7 +490,8 @@
             "names": [
               "ME"
             ]
-          }
+          },
+          "priceEvidence": "mine was 24"
         },
         {
           "name": "Kayla meal",
@@ -499,7 +502,8 @@
             "names": [
               "Kayla"
             ]
-          }
+          },
+          "priceEvidence": "kaylas was 30"
         }
       ],
       "charges": [
@@ -507,13 +511,15 @@
           "kind": "tax",
           "amount": "6.00",
           "percent": null,
-          "method": "proportional"
+          "method": "proportional",
+          "amountEvidence": "tax was $6"
         },
         {
           "kind": "tip",
           "amount": "14.40",
           "percent": null,
-          "method": "proportional"
+          "method": "proportional",
+          "amountEvidence": "tip was 14.40"
         }
       ],
       "statedTotal": null,
@@ -582,7 +588,8 @@
               "ME",
               "Rui"
             ]
-          }
+          },
+          "priceEvidence": "nachos 18"
         },
         {
           "name": "Pizza",
@@ -594,7 +601,8 @@
               "Rui",
               "Kayla"
             ]
-          }
+          },
+          "priceEvidence": "pizza 36"
         },
         {
           "name": "Margarita",
@@ -605,7 +613,8 @@
             "names": [
               "Kayla"
             ]
-          }
+          },
+          "priceEvidence": "margs 12 each"
         }
       ],
       "charges": [
@@ -613,13 +622,15 @@
           "kind": "tax",
           "amount": "9.00",
           "percent": null,
-          "method": "proportional"
+          "method": "proportional",
+          "amountEvidence": "tax 9"
         },
         {
           "kind": "tip",
           "amount": "18.00",
           "percent": null,
-          "method": "proportional"
+          "method": "proportional",
+          "amountEvidence": "tip 18"
         }
       ],
       "statedTotal": null,
@@ -710,7 +721,8 @@
               "name": "Kayla",
               "weight": 1
             }
-          ]
+          ],
+          "priceEvidence": "i paid 840 for the house"
         },
         {
           "name": "Groceries",
@@ -720,7 +732,9 @@
             "mode": "all",
             "names": []
           },
-          "paidBy": "Rui"
+          "paidBy": "Rui",
+          "priceEvidence": "rui paid 120 groceries",
+          "payerEvidence": "rui paid 120 groceries"
         },
         {
           "name": "Transportation",
@@ -733,7 +747,9 @@
               "Kayla"
             ]
           },
-          "paidBy": "Kayla"
+          "paidBy": "Kayla",
+          "priceEvidence": "kayla paid 90 for transportation",
+          "payerEvidence": "kayla paid 90 for transportation"
         }
       ],
       "charges": [],
@@ -765,7 +781,8 @@
               "name": "Kayla",
               "weight": 2
             }
-          ]
+          ],
+          "priceEvidence": "i paid 600 lodging"
         },
         {
           "name": "Dinner",
@@ -775,7 +792,9 @@
             "mode": "all",
             "names": []
           },
-          "paidBy": "Rui"
+          "paidBy": "Rui",
+          "priceEvidence": "rui paid dinner 120",
+          "payerEvidence": "rui paid dinner 120"
         },
         {
           "name": "Taxi",
@@ -787,7 +806,9 @@
               "Rui"
             ]
           },
-          "paidBy": "Kayla"
+          "paidBy": "Kayla",
+          "priceEvidence": "kayla paid 60 taxi",
+          "payerEvidence": "kayla paid 60 taxi"
         }
       ],
       "charges": [],
@@ -895,7 +916,8 @@
           "refund": {
             "amount": "100.00",
             "recipient": "ME"
-          }
+          },
+          "priceEvidence": "i paid 600 lodging"
         },
         {
           "name": "Dinner",
@@ -918,7 +940,9 @@
               "name": "Rui",
               "weight": 2
             }
-          ]
+          ],
+          "priceEvidence": "rui paid dinner 120",
+          "payerEvidence": "rui paid dinner 120"
         },
         {
           "name": "Taxi",
@@ -930,7 +954,9 @@
               "Rui"
             ]
           },
-          "paidBy": "Kayla"
+          "paidBy": "Kayla",
+          "priceEvidence": "kayla paid 60 taxi",
+          "payerEvidence": "kayla paid 60 taxi"
         }
       ],
       "charges": [],

@@ -470,6 +470,136 @@ def dropped_payer_question(
     return None
 
 
+# ----------------------------------------------------------- evidence (#55)
+#
+# The model quotes the user's exact words behind each item's price and
+# payer and each charge's amount. A quote that isn't in the user's
+# messages word for word (a paraphrase) proves nothing and is ignored, so
+# the checks above still decide. A word-for-word quote that contradicts
+# the value it backs ("tip 18" for an $18 tax) is rejected.
+
+_QUOTE_TOKEN = re.compile(
+    r"\$?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?%?|\$?\.\d+%?|[a-z0-9']+"
+)
+_PERCENT_WORDS = ("percent", "pct")
+
+
+def _normalize(text: str) -> str:
+    text = text.lower().replace("’", "'")
+    return " ".join(text.split()).strip(" \"'.,;:!?")
+
+
+def _verbatim(quote, texts: list[str]) -> str | None:
+    """The normalized quote if it appears in a user message, else None."""
+    if not quote or not quote.strip():
+        return None
+    normalized = _normalize(quote)
+    if normalized and any(normalized in _normalize(text) for text in texts):
+        return normalized
+    return None
+
+
+def _quote_tokens(quote: str) -> list[tuple[str, Decimal | None, bool]]:
+    """(token, number or None, is_percent) for each token in a quote."""
+    raw = _QUOTE_TOKEN.findall(quote)
+    tokens = []
+    for index, token in enumerate(raw):
+        stripped = token.lstrip("$").rstrip("%").replace(",", "")
+        number = None
+        if stripped and (stripped[0].isdigit() or stripped[0] == "."):
+            number = _decimal(stripped)
+        following = raw[index + 1] if index + 1 < len(raw) else ""
+        is_percent = number is not None and (token.endswith("%") or following in _PERCENT_WORDS)
+        tokens.append((token, number, is_percent))
+    return tokens
+
+
+def _item_amounts(item: dict) -> set[Decimal]:
+    price = _decimal(item.get("unitPrice"))
+    if price is None:
+        return set()
+    return {price, price * (item.get("quantity") or 1)}
+
+
+def _price_quote_ok(quote: str, item: dict) -> bool:
+    numbers = {n for _, n, pct in _quote_tokens(quote) if n is not None and not pct}
+    return bool(numbers & _item_amounts(item))
+
+
+def _payer_quote_ok(quote: str, item: dict, current_user: str) -> bool:
+    if not any(_says_paid(words, item["paidBy"], current_user) for words in _clauses([quote])):
+        return False
+    # A quote about another item ("Rui bought a $20 pizza" on the $10 one).
+    numbers = {n for _, n, pct in _quote_tokens(quote) if n is not None and not pct}
+    return not numbers or bool(numbers & _item_amounts(item))
+
+
+def _charge_quote_ok(quote: str, charge: dict) -> bool:
+    tokens = _quote_tokens(quote)
+    words = [token for token, number, _ in tokens]
+    kind_positions = [
+        index
+        for index in range(len(words))
+        for phrase in _CHARGE_WORDS[charge["kind"]]
+        if _phrase_at(words, index, phrase)
+    ]
+    numbers = [(index, n, pct) for index, (_, n, pct) in enumerate(tokens) if n is not None]
+    if not kind_positions or not numbers:
+        return False
+
+    # The charge's number is the one nearest its own word; on a tie, the
+    # one after it ("tax was $6 and tip was 14.40": tip -> 14.40).
+    def nearness(entry):
+        index = entry[0]
+        distance = min(abs(index - pos) for pos in kind_positions)
+        after = any(index > pos for pos in kind_positions if abs(index - pos) == distance)
+        return (distance, not after)
+
+    _, number, is_percent = min(numbers, key=nearness)
+    amount = _decimal(charge.get("amount"))
+    percent = _decimal(charge.get("percent"))
+    if percent is not None:
+        return is_percent and number == percent
+    return amount is not None and not is_percent and number == amount
+
+
+def ground_payer_evidence(
+    data: dict, texts: list[str], current_user: str
+) -> tuple[dict, list[str]]:
+    """Copy of data with any per-item payer its own quote contradicts cleared.
+
+    Clearing paidBy makes the pipeline ask "Who paid for <item>?".
+    """
+    grounded = copy.deepcopy(data)
+    fired = []
+    for item in grounded.get("items", []):
+        if not item.get("paidBy"):
+            continue
+        quote = _verbatim(item.get("payerEvidence"), texts)
+        if quote is not None and not _payer_quote_ok(quote, item, current_user):
+            item["paidBy"] = None
+            if "payer_evidence" not in fired:
+                fired.append("payer_evidence")
+    for check in fired:
+        logger.info("grounding check fired: %s", check)
+    return grounded, fired
+
+
+def evidence_question(data: dict, texts: list[str]) -> str | None:
+    """A question for the first price or charge its own quote contradicts."""
+    for item in data.get("items", []):
+        quote = _verbatim(item.get("priceEvidence"), texts)
+        if quote is not None and item.get("unitPrice") is not None and not _price_quote_ok(quote, item):
+            logger.info("grounding check fired: %s", "price_evidence")
+            return f"How much was {item['name']}?"
+    for charge in data.get("charges", []):
+        quote = _verbatim(charge.get("amountEvidence"), texts)
+        if quote is not None and not _charge_quote_ok(quote, charge):
+            logger.info("grounding check fired: %s", "charge_evidence")
+            return f"How much was the {charge['kind']}?"
+    return None
+
+
 # ------------------------------------------------------------------ amounts
 
 
