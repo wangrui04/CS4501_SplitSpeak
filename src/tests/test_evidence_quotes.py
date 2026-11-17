@@ -290,3 +290,46 @@ def test_official_fixtures_quote_every_price_and_charge():
                 assert entry.get("payerEvidence"), (text[:30], entry["name"])
         for entry in fixture["charges"]:
             assert entry.get("amountEvidence"), (text[:30], entry["kind"])
+
+
+# ------------------------------- live retest: who paid the tax and tip?
+
+TACOS = (
+    "Rui paid $24 for tacos for everyone and Sarah paid $9 for drinks for her "
+    "and me. tax was 3 and tip was 6, split proportionally."
+)
+
+
+def tacos_parsed(payer=None):
+    return parsed(
+        [
+            item("Tacos", "24", mode="all", paidBy="Rui"),
+            item("Drinks", "9", ["Sarah", "ME"], paidBy="Sarah"),
+        ],
+        payer=payer,
+        charges=[charge("tax", "3"), charge("tip", "6")],
+    )
+
+
+def test_items_all_paid_but_charges_ask_who_paid_them():
+    result = run(tacos_parsed(), TACOS)
+
+    assert result == {"type": "question", "question": "Who paid the tax and tip?"}
+
+
+def test_one_name_answer_to_the_charges_question_previews():
+    result = parse_turn(
+        # After the answer, the model names Rui as the main payer.
+        llm=FakeLlmClient([tacos_parsed(payer="Rui")]),
+        conversation=[
+            {"role": "user", "content": TACOS},
+            {"role": "assistant", "content": "Who paid the tax and tip?"},
+            {"role": "user", "content": "rui"},
+        ],
+        roster=ROSTER,
+        current_user="Kayla",
+    )
+
+    assert result["type"] == "preview", result.get("question")
+    paid = {entry["name"]: entry["cents"] for entry in result["preview"]["paid"]}
+    assert paid == {"Sarah": 900, "Kayla": 0, "Rui": 3300}

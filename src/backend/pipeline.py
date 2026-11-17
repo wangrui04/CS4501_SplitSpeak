@@ -22,6 +22,7 @@ from backend.grounding import (
     REPEAT_GIVE_UP,
     amount_question,
     charge_question,
+    charges_payer_question,
     dropped_payer_question,
     evidence_question,
     ground_payer_evidence,
@@ -86,6 +87,9 @@ def _payer_question(data):
     if items and missing and len(missing) < len(items):
         # "Pizza ($10)" when two items share a name, so it's clear which.
         return ITEM_PAYER_QUESTION.format(item=item_labels(items)[missing[0]])
+    if items and not missing and data["charges"]:
+        # Every item has a payer; only the tax/tip/fee is unclaimed.
+        return charges_payer_question(data["charges"])
     return PAYER_QUESTION
 
 

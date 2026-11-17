@@ -130,6 +130,7 @@ def _names_person(
 
 PAYER_QUESTION = "Who paid for this expense?"
 ITEM_PAYER_QUESTION = "Who paid for {item}?"
+CHARGES_PAYER_QUESTION = "Who paid {charges}?"
 PAYER_HINT = (
     "I still need to know who paid for this expense. "
     "Reply with just a name, e.g. {example}."
@@ -686,6 +687,19 @@ def _join_kinds(kinds: list[str]) -> str:
     if len(kinds) == 2:
         return f"the {kinds[0]} and {kinds[1]}"
     return "the " + ", ".join(kinds[:-1]) + f", and {kinds[-1]}"
+
+
+def charges_payer_question(charges: list[dict]) -> str:
+    """"Who paid the tax and tip?" when every item already has a payer.
+
+    It starts with "Who paid" and asks nothing else, so a one-name reply
+    counts as the main payer (see payer_answers()).
+    """
+    kinds = []
+    for charge in charges:
+        if charge["kind"] not in kinds:
+            kinds.append(charge["kind"])
+    return CHARGES_PAYER_QUESTION.format(charges=_join_kinds(kinds))
 
 
 def charge_question(data: dict, texts: list[str]) -> str | None:
