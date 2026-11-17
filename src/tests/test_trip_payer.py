@@ -85,8 +85,9 @@ def test_still_asks_when_an_item_has_no_payer():
 
     result = run(parsed(items))
 
+    # Only Groceries is missing a payer, so ask about it by name (#53).
     assert result["type"] == "question"
-    assert result["question"] == "Who paid for this expense?"
+    assert result["question"] == "Who paid for Groceries?"
 
 
 def test_still_asks_when_tax_or_tip_has_no_payer():

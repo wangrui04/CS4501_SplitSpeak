@@ -87,7 +87,17 @@ def _within_one_edit(word: str, name: str) -> bool:
     if abs(len(word) - len(name)) > 1:
         return False
     if len(word) == len(name):
-        return sum(a != b for a, b in zip(word, name)) <= 1
+        diffs = [i for i, (a, b) in enumerate(zip(word, name)) if a != b]
+        if len(diffs) <= 1:
+            return True
+        # Two swapped neighbouring letters ("riu" for "rui").
+        first, second = diffs[0], diffs[-1]
+        return (
+            len(diffs) == 2
+            and second == first + 1
+            and word[first] == name[second]
+            and word[second] == name[first]
+        )
     shorter, longer = sorted((word, name), key=len)
     return any(longer[:i] + longer[i + 1 :] == shorter for i in range(len(longer)))
 
@@ -104,6 +114,191 @@ def _names_person(word: str, person: str, current_user: str) -> bool:
         return True
     # Small typos ("Riu" for "Rui") that the LLM is allowed to correct.
     return len(name) >= 3 and _within_one_edit(word, name)
+
+
+# ------------------------------------------------------ question templates
+#
+# Payer questions the app asks itself. The pipeline asks them and
+# payer_answers() recognizes them, so both sides use the same strings.
+# Only these count: an answer to a question the LLM worded is not evidence.
+
+PAYER_QUESTION = "Who paid for this expense?"
+ITEM_PAYER_QUESTION = "Who paid for {item}?"
+PAYER_HINT = (
+    "I still need to know who paid for this expense. "
+    "Reply with just a name, e.g. {example}."
+)
+ITEM_PAYER_HINT = (
+    "I still need to know who paid for {item}. "
+    "Reply with just a name, e.g. {example}."
+)
+REPEAT_HINT = "I still need this before I can show a preview: {question}"
+REPEAT_GIVE_UP = (
+    "I still couldn't work this out from your answers. "
+    "Please enter this expense manually."
+)
+
+
+def _template_pattern(template: str) -> re.Pattern:
+    """Regex for a template: {item} is captured, {example} is any name."""
+    parts = re.split(r"\{(\w+)\}", template)
+    pattern = ""
+    for index, part in enumerate(parts):
+        if index % 2 == 0:
+            pattern += re.escape(part)
+        elif part == "item":
+            pattern += "(?P<item>.+)"
+        else:
+            pattern += ".+"
+    return re.compile(f"^{pattern}$")
+
+
+_EXPENSE_QUESTIONS = [_template_pattern(PAYER_QUESTION), _template_pattern(PAYER_HINT)]
+_ITEM_QUESTIONS = [_template_pattern(ITEM_PAYER_QUESTION), _template_pattern(ITEM_PAYER_HINT)]
+_ONLY_PAYER_BLOCKERS = re.compile(
+    r"\b(?:" + "|".join(map(re.escape, config.GROUNDING_NOT_ONLY_PAYER_WORDS)) + r")\b"
+)
+
+
+def _asks_only_who_paid(text: str) -> bool:
+    """A question that asks who paid and nothing else, whoever wrote it.
+
+    "Who paid for the lunch?" counts; "Who paid, and how should it be
+    split?" does not, because a bare name can't answer both parts.
+    """
+    lowered = text.strip().lower()
+    return (
+        lowered.startswith("who paid")
+        and lowered.endswith("?")
+        and lowered.count("?") == 1
+        and not _ONLY_PAYER_BLOCKERS.search(lowered)
+    )
+
+
+def _payer_question_target(text: str):
+    """None if text isn't a payer question, else (kind, label).
+
+    kind is "expense" or "item"; label is the item the question names,
+    which ground_payers() matches against the current items.
+    """
+    text = text.strip()
+    if any(pattern.match(text) for pattern in _EXPENSE_QUESTIONS):
+        return ("expense", None)
+    for pattern in _ITEM_QUESTIONS:
+        match = pattern.match(text)
+        if match and (pattern is not _ITEM_QUESTIONS[0] or _asks_only_who_paid(text)):
+            return ("item", match.group("item"))
+    if _asks_only_who_paid(text):
+        return ("expense", None)
+    return None
+
+
+def _format_price(price: Decimal) -> str:
+    if price == price.to_integral_value():
+        return str(price.quantize(Decimal(1)))
+    return str(price.quantize(Decimal("0.01")))
+
+
+def item_labels(items: list[dict]) -> list[str]:
+    """How questions name each item: "Pizza ($10)" when two share a name."""
+    names = [item.get("name", "") for item in items]
+    labels = []
+    for index, item in enumerate(items):
+        name = names[index]
+        twins = [i for i, other in enumerate(names) if other.lower() == name.lower()]
+        if len(twins) == 1:
+            labels.append(name)
+            continue
+        price = _decimal(item.get("unitPrice"))
+        twin_prices = [_decimal(items[i].get("unitPrice")) for i in twins]
+        if price is not None and twin_prices.count(price) == 1:
+            labels.append(f"{name} (${_format_price(price)})")
+        else:
+            labels.append(f"{name} #{twins.index(index) + 1}")
+    return labels
+
+
+def _match_label(label: str, labels: list[str]) -> int | None:
+    def norm(text):
+        text = " ".join(text.lower().split())
+        return text[4:] if text.startswith("the ") else text
+
+    wanted = norm(label)
+    matches = [i for i, candidate in enumerate(labels) if norm(candidate) == wanted]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _hint_example(roster: list[str], current_user: str) -> str:
+    return next((name for name in roster if name != current_user), "me")
+
+
+def repeat_hint(question: str, roster: list[str], current_user: str) -> str:
+    """The clearer version of a question, used when it would repeat."""
+    example = _hint_example(roster, current_user)
+    target = _payer_question_target(question)
+    if target is None:
+        return REPEAT_HINT.format(question=question)
+    kind, label = target
+    if kind == "item":
+        return ITEM_PAYER_HINT.format(item=label, example=example)
+    return PAYER_HINT.format(example=example)
+
+
+def _canonical(person: str | None, current_user: str) -> str | None:
+    return ME if person == current_user else person
+
+
+def _single_person(reply: str, roster: list[str], current_user: str) -> str | None:
+    """The one person a short reply names ("Rui", "me"), else None."""
+    found = set()
+    for words in _clauses([reply]):
+        for word in words:
+            if word in _FIRST_PERSON:
+                found.add(ME)
+            for member in roster:
+                if _names_person(word, member, current_user):
+                    found.add(_canonical(member, current_user))
+    return found.pop() if len(found) == 1 else None
+
+
+def payer_answers(
+    conversation: list[dict], roster: list[str], current_user: str
+) -> list[tuple[str | None, str]]:
+    """Who the user named in reply to a payer question, oldest first.
+
+    Each entry is (item label or None, person), with ME for the signed-in
+    user. Only one-name replies to questions that ask just "who paid"
+    count (the app's own, or the LLM's); ground_payers() decides which
+    item, if any, each one refers to.
+    """
+    answers = []
+    for question, reply in zip(conversation, conversation[1:]):
+        if question.get("role") != "assistant" or reply.get("role") != "user":
+            continue
+        target = _payer_question_target(question.get("content", ""))
+        if target is None:
+            continue
+        person = _single_person(reply.get("content", ""), roster, current_user)
+        if person is not None:
+            answers.append((target[1], person))
+    return answers
+
+
+def _resolve_answers(answers, items):
+    """(answer for the whole expense, {item index: person})."""
+    labels = item_labels(items)
+    expense_answer = None
+    item_answers = {}
+    for label, person in answers:
+        index = _match_label(label, labels) if label is not None else None
+        if index is None:
+            expense_answer = person
+            continue
+        item_answers[index] = person
+        if len(items) == 1:
+            # "Who paid for the lunch?" when lunch is the whole expense.
+            expense_answer = person
+    return expense_answer, item_answers
 
 
 # -------------------------------------------------------------------- payer
@@ -156,26 +351,46 @@ def _payer_grounded(person: str, clauses: list[list[str]], current_user: str) ->
 
 
 def ground_payers(
-    data: dict, texts: list[str], current_user: str
+    data: dict,
+    texts: list[str],
+    current_user: str,
+    answers: list | None = None,
 ) -> tuple[dict, list[str]]:
     """Copy of data with any payer the user never stated cleared.
 
-    Returns (data, fired) where fired names the checks that cleared a
-    payer. Clearing a payer makes the pipeline ask "Who paid?".
+    A payer counts as stated when a message ties them to a payment word,
+    or when the user named them alone in reply to a question asking only
+    who paid (answers, from payer_answers()). Returns (data, fired) where
+    fired names the checks that cleared a payer, so the pipeline asks.
     """
     grounded = copy.deepcopy(data)
     clauses = _clauses(texts)
+    items = grounded.get("items", [])
+    answered_expense, item_answers = _resolve_answers(answers or [], items)
     fired = []
 
+    def answered(person, *named):
+        person = _canonical(person, current_user)
+        return any(name is not None and name == person for name in named)
+
     payer = grounded.get("payer")
-    if payer is not None and not _payer_grounded(payer, clauses, current_user):
+    if (
+        payer is not None
+        and not _payer_grounded(payer, clauses, current_user)
+        and not answered(payer, answered_expense)
+    ):
         grounded["payer"] = None
         fired.append("payer")
 
     cleared_item = False
-    for item in grounded.get("items", []):
+    for index, item in enumerate(items):
         paid_by = item.get("paidBy")
-        if paid_by and not _payer_grounded(paid_by, clauses, current_user):
+        item_answer = item_answers.get(index)
+        if (
+            paid_by
+            and not _payer_grounded(paid_by, clauses, current_user)
+            and not answered(paid_by, item_answer, answered_expense)
+        ):
             item["paidBy"] = None
             cleared_item = True
     if cleared_item:

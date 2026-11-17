@@ -480,9 +480,14 @@ def test_chat_conversational_correction(db):
 
 
 def test_chat_exceeding_five_prompts_marked_unsuccessful(db):
+    # A different question each turn: the loop guard (#53) would stop a
+    # repeated one before the prompt limit is reached.
     questions = [
-        make_scripted_expense(price=None)
-        for _ in range(5)
+        {
+            **make_scripted_expense(price=None),
+            "openQuestions": [{"field": "x", "question": f"Question {turn}?"}],
+        }
+        for turn in range(1, 6)
     ]
     fake = FakeLlmClient(questions)
     app = create_app(
