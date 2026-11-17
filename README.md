@@ -276,6 +276,8 @@ Before calculating anything, the backend also checks the LLM's reading against w
 
 A plain one-name answer ("Rui", "me") to a question that asks only who paid counts as stated. When only one item is missing a payer, the app asks about that item by name ("Who paid for Pizza?"), adding the price when two items share a name ("Who paid for Pizza ($10)?"). The AI is asked to request all missing details in one question, and when it lists several questions they are shown together. The app never asks the same question twice in a row: the second time it asks a clearer version, and if that goes unanswered too, it offers manual entry.
 
+Loans, interest, and repayments aren't shared expenses. When the AI flags a message as one of these (`unsupported` in the parsed output), the app replies on the first turn that it can only split shared expenses and points to Settle up or manual entry, instead of asking questions.
+
 A failed check only asks a question. It never changes an amount or saves anything. The word lists live in `src/backend/config.py`.
 
 ### 5. Expense Preview and Confirmation

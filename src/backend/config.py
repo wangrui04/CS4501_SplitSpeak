@@ -8,7 +8,7 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
-PROMPT_VERSION = "2026-11-16.1"
+PROMPT_VERSION = "2026-11-17.1"
 
 LLM_MAX_ATTEMPTS = 2
 LLM_MAX_TOKENS = 16000
@@ -21,6 +21,19 @@ REMINDER_COOLDOWN_MINUTES = 60
 
 CHAT_RATE_LIMIT_PER_MINUTE = 20
 MAX_MESSAGE_LENGTH = 1000
+
+# Fixed replies when the model flags a message as out of scope (#54).
+OUT_OF_SCOPE_MESSAGES = {
+    "loan": (
+        "I can only split shared expenses, not loans, interest, or "
+        "repayments. To record money someone paid you back, use Settle up. "
+        "To record a fixed amount someone covered for you, use manual entry."
+    ),
+    "other": (
+        "That doesn't look like a shared expense. Describe what was bought, "
+        "who paid, and who shared it, or use manual entry."
+    ),
+}
 
 DEFAULT_WEB_ORIGINS = (
     "http://localhost:5173",
@@ -73,6 +86,12 @@ received it. Keep unitPrice as the original price.
 - When the conversation includes a correction ("actually", "wait"), return \
 the full revised expense, not just the change.
 - statedTotal is the total the user stated, if any. Otherwise null.
+- Only shared expenses are supported. If the message is a loan, interest, \
+or a repayment of money owed (for example "Alex lent me $50" or "Sam paid \
+me back"), set unsupported to "loan" and leave everything else empty. If \
+it describes no expense at all, set unsupported to "other". A purchase \
+that mentions lending in passing ("I lent Alex my card and he paid for \
+lunch") is still an expense: leave unsupported null.
 
 How to ask clarification questions:
 - If a fact is simply missing (a price, who paid, a tax or tip amount), \
