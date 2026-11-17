@@ -375,3 +375,107 @@ def test_answer_to_a_labelled_duplicate_grounds_that_item():
     assert result["type"] == "preview", result.get("question")
     paid = {entry["name"]: entry["cents"] for entry in result["preview"]["paid"]}
     assert paid == {"Sarah": 1500, "Kayla": 0, "Rui": 1000}
+
+
+# ------------------------------- Run B retest: answers to unmatched item names
+
+
+def two_pizzas_no_payers():
+    return [
+        item("Pizza", "10", ["ME", "Rui"]),
+        item("Pizza", "15", ["Sarah", "Rui"]),
+    ]
+
+
+PRICED_PIZZAS = (
+    "I shared a $10 pizza with Rui that she paid for. "
+    "Sarah paid for a $15 pizza and Rui had one slice."
+)
+
+
+def test_answer_to_unmatched_item_question_is_ignored_when_several_items():
+    conversation = [user(PRICED_PIZZAS), app("Who paid for the first pizza?"), user("Rui")]
+
+    data, _ = ground(parsed(two_pizzas_no_payers(), payer="Rui"), conversation)
+
+    assert data["payer"] is None
+
+
+def test_question_naming_the_description_counts_for_the_expense():
+    conversation = [user("dinner: burger 12, fries 4"), app("Who paid for dinner?"), user("Rui")]
+    items = [item("Burger", "12", mode="all"), item("Fries", "4", mode="all")]
+    raw = {**parsed(items, payer="Rui"), "description": "Dinner"}
+
+    data, _ = ground(raw, conversation)
+
+    assert data["payer"] == "Rui"
+
+
+# ----------------------------------------------------------- dropped payers
+
+from backend.grounding import dropped_payer_question  # noqa: E402
+
+
+def test_named_payer_missing_from_the_reading_is_asked_about():
+    data = parsed(two_pizzas_no_payers(), payer="Rui")
+
+    question = dropped_payer_question(data, [user(PRICED_PIZZAS)], ROSTER, "Kayla")
+
+    assert question == (
+        "You said Sarah paid for something, but nothing here is paid by Sarah. "
+        'What did Sarah pay for? (Say "nothing" if that was a mistake.)'
+    )
+
+
+def test_signed_in_user_missing_as_payer_is_asked_about():
+    data = parsed([item("Lunch", "20", mode="all")], payer="Rui")
+
+    question = dropped_payer_question(data, [user("i paid for lunch, 20")], ROSTER, "Kayla")
+
+    assert question == (
+        "You said you paid for something, but nothing here is paid by you. "
+        'What did you pay for? (Say "nothing" if that was a mistake.)'
+    )
+
+
+def test_no_question_when_every_named_payer_is_used():
+    items = two_pizzas_no_payers()
+    items[0]["paidBy"] = "Rui"
+    items[1]["paidBy"] = "Sarah"
+
+    assert dropped_payer_question(parsed(items), [user(PRICED_PIZZAS)], ROSTER, "Kayla") is None
+
+
+def test_dropped_payer_is_asked_about_only_once():
+    data = parsed(two_pizzas_no_payers(), payer="Rui")
+    asked = dropped_payer_question(data, [user(PRICED_PIZZAS)], ROSTER, "Kayla")
+    conversation = [user(PRICED_PIZZAS), app(asked), user("nothing, my mistake")]
+
+    assert dropped_payer_question(data, conversation, ROSTER, "Kayla") is None
+
+
+def test_dropped_payer_check_needs_an_exact_name():
+    roster = ["Sarah", "Ben"]
+    data = parsed([item("Rent", "900", mode="all")], payer="ME")
+
+    question = dropped_payer_question(
+        data, [user("i paid rent, 900. it has been paid in full")], roster, "Sarah"
+    )
+
+    assert question is None
+
+
+def test_repayment_is_not_a_dropped_payer():
+    data = parsed([item("Lunch", "20", mode="all")], payer="ME")
+    text = "i paid 20 for lunch. Rui paid me back last week for coffee"
+
+    assert dropped_payer_question(data, [user(text)], ROSTER, "Kayla") is None
+
+
+def test_red_team_run_b_asks_what_sarah_paid_for():
+    conversation = [user(PRICED_PIZZAS), app(PAYER_QUESTION), user("Rui")]
+
+    result = run(parsed(two_pizzas_no_payers(), payer="Rui"), conversation)
+
+    assert result["type"] == "question"
+    assert result["question"].startswith("You said Sarah paid for something")

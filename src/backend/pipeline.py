@@ -21,6 +21,7 @@ from backend.grounding import (
     REPEAT_GIVE_UP,
     amount_question,
     charge_question,
+    dropped_payer_question,
     ground_payers,
     item_labels,
     payer_answers,
@@ -199,7 +200,11 @@ def _parse_once(*, llm, conversation, roster, current_user):
             ),
         }
 
-    grounding_question = amount_question(data, texts) or charge_question(data, texts)
+    grounding_question = (
+        dropped_payer_question(data, conversation, roster, current_user)
+        or amount_question(data, texts)
+        or charge_question(data, texts)
+    )
     if grounding_question:
         return {"type": "question", "question": grounding_question}
 

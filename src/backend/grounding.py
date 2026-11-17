@@ -102,8 +102,14 @@ def _within_one_edit(word: str, name: str) -> bool:
     return any(longer[:i] + longer[i + 1 :] == shorter for i in range(len(longer)))
 
 
-def _names_person(word: str, person: str, current_user: str) -> bool:
-    """Does one word refer to this person (ME, or a roster name)?"""
+def _names_person(
+    word: str, person: str, current_user: str, exact: bool = False
+) -> bool:
+    """Does one word refer to this person (ME, or a roster name)?
+
+    exact=True turns off typo matching, for checks that ask a question
+    when a name is found ("been" must not read as "Ben").
+    """
     if person == ME or person == current_user:
         if word in _FIRST_PERSON:
             return True
@@ -113,7 +119,7 @@ def _names_person(word: str, person: str, current_user: str) -> bool:
     if word in (name, f"{name}s", f"{name}'s"):
         return True
     # Small typos ("Riu" for "Rui") that the LLM is allowed to correct.
-    return len(name) >= 3 and _within_one_edit(word, name)
+    return not exact and len(name) >= 3 and _within_one_edit(word, name)
 
 
 # ------------------------------------------------------ question templates
@@ -133,6 +139,14 @@ ITEM_PAYER_HINT = (
     "Reply with just a name, e.g. {example}."
 )
 REPEAT_HINT = "I still need this before I can show a preview: {question}"
+DROPPED_PAYER_QUESTION = (
+    "You said {name} paid for something, but nothing here is paid by {name}. "
+    'What did {name} pay for? (Say "nothing" if that was a mistake.)'
+)
+DROPPED_SELF_QUESTION = (
+    "You said you paid for something, but nothing here is paid by you. "
+    'What did you pay for? (Say "nothing" if that was a mistake.)'
+)
 REPEAT_GIVE_UP = (
     "I still couldn't work this out from your answers. "
     "Please enter this expense manually."
@@ -284,19 +298,29 @@ def payer_answers(
     return answers
 
 
-def _resolve_answers(answers, items):
-    """(answer for the whole expense, {item index: person})."""
+def _resolve_answers(answers, items, description):
+    """(answer for the whole expense, {item index: person}).
+
+    An answer about an item the app can't match counts for the whole
+    expense only when there is just one item, or the question named the
+    expense itself ("Who paid for dinner?"). Otherwise it is ignored, so
+    "Who paid for the first pizza?" -> "Rui" can't make Rui the payer of
+    every item.
+    """
     labels = item_labels(items)
     expense_answer = None
     item_answers = {}
     for label, person in answers:
-        index = _match_label(label, labels) if label is not None else None
-        if index is None:
+        if label is None:
             expense_answer = person
             continue
-        item_answers[index] = person
-        if len(items) == 1:
-            # "Who paid for the lunch?" when lunch is the whole expense.
+        index = _match_label(label, labels)
+        if index is not None:
+            item_answers[index] = person
+            if len(items) == 1:
+                # "Who paid for the lunch?" when lunch is the whole expense.
+                expense_answer = person
+        elif len(items) <= 1 or _match_label(label, [description or ""]) is not None:
             expense_answer = person
     return expense_answer, item_answers
 
@@ -322,11 +346,13 @@ def _squashed_says_paid(word: str, person: str, current_user: str) -> bool:
     )
 
 
-def _says_paid(words: list[str], person: str, current_user: str) -> bool:
+def _says_paid(
+    words: list[str], person: str, current_user: str, exact: bool = False
+) -> bool:
     for index, word in enumerate(words):
         if _squashed_says_paid(word, person, current_user):
             return True
-        if not _names_person(word, person, current_user):
+        if not _names_person(word, person, current_user, exact):
             continue
 
         # "<person> [filler...] <payment word>"
@@ -346,8 +372,10 @@ def _says_paid(words: list[str], person: str, current_user: str) -> bool:
     return False
 
 
-def _payer_grounded(person: str, clauses: list[list[str]], current_user: str) -> bool:
-    return any(_says_paid(words, person, current_user) for words in clauses)
+def _payer_grounded(
+    person: str, clauses: list[list[str]], current_user: str, exact: bool = False
+) -> bool:
+    return any(_says_paid(words, person, current_user, exact) for words in clauses)
 
 
 def ground_payers(
@@ -366,7 +394,9 @@ def ground_payers(
     grounded = copy.deepcopy(data)
     clauses = _clauses(texts)
     items = grounded.get("items", [])
-    answered_expense, item_answers = _resolve_answers(answers or [], items)
+    answered_expense, item_answers = _resolve_answers(
+        answers or [], items, grounded.get("description")
+    )
     fired = []
 
     def answered(person, *named):
@@ -399,6 +429,45 @@ def ground_payers(
     for check in fired:
         logger.info("grounding check fired: %s", check)
     return grounded, fired
+
+
+def dropped_payer_question(
+    data: dict, conversation: list[dict], roster: list[str], current_user: str
+) -> str | None:
+    """Ask about someone the user said paid, who pays for nothing here.
+
+    Catches readings that move a payment to someone else ("Sarah paid for
+    a pizza" read as Rui paying for both). Names must match exactly, and
+    each person is asked about at most once, so a correction ("actually
+    Kayla paid") can't cause a loop.
+    """
+    clauses = _clauses(user_texts(conversation))
+    asked = {
+        message.get("content", "").strip()
+        for message in conversation
+        if message.get("role") == "assistant"
+    }
+    payers = {_canonical(data.get("payer"), current_user)}
+    payers |= {
+        _canonical(item.get("paidBy"), current_user) for item in data.get("items", [])
+    }
+
+    for member in roster:
+        person = _canonical(member, current_user)
+        if person in payers:
+            continue
+        if not _payer_grounded(member, clauses, current_user, exact=True):
+            continue
+        question = (
+            DROPPED_SELF_QUESTION
+            if person == ME
+            else DROPPED_PAYER_QUESTION.format(name=member)
+        )
+        if question in asked:
+            continue
+        logger.info("grounding check fired: %s", "dropped_payer")
+        return question
+    return None
 
 
 # ------------------------------------------------------------------ amounts
