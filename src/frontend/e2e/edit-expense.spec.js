@@ -86,7 +86,7 @@ test('saved expense opens a detailed breakdown', async ({
   const modal = await openExpense(page, name);
 
   await expect(
-    modal.getByText(name, { exact: true })
+    modal.getByRole('heading', { name, exact: true })
   ).toBeVisible();
 
   await expect(
@@ -171,7 +171,7 @@ test('canceling changes keeps original expense', async ({
   }).click();
 
   await expect(
-    modal.getByText(name, { exact: true })
+    modal.getByRole('heading', { name, exact: true })
   ).toBeVisible();
 
   await expect(
