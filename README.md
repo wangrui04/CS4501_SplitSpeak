@@ -271,7 +271,10 @@ Before calculating anything, the backend also checks the LLM's reading against w
 
 - A payer, or a per-item payer, is kept only if the user tied that person to a payment word ("I paid", "Alex covered it", "paid by Sam"). Otherwise the app asks "Who paid for this expense?".
 - Every item price, refund, and tax/tip/fee amount or percent must appear as a number in the user's messages. Otherwise the app asks how much it was.
+- If the user says someone paid ("Sarah paid for a pizza") but the LLM's reading has them paying for nothing, the app asks what that person paid for, once.
 - If the user mentions tax, tip, or a fee that the LLM dropped, and did not say it was included or that there was none, the app asks how to handle it.
+
+A plain one-name answer ("Rui", "me") to a question that asks only who paid counts as stated. When only one item is missing a payer, the app asks about that item by name ("Who paid for Pizza?"), adding the price when two items share a name ("Who paid for Pizza ($10)?"). The AI is asked to request all missing details in one question, and when it lists several questions they are shown together. The app never asks the same question twice in a row: the second time it asks a clearer version, and if that goes unanswered too, it offers manual entry.
 
 A failed check only asks a question. It never changes an amount or saves anything. The word lists live in `src/backend/config.py`.
 

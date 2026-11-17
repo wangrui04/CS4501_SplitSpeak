@@ -16,9 +16,16 @@ from backend.allocation import (
     WeightsMismatchError,
 )
 from backend.grounding import (
+    ITEM_PAYER_QUESTION,
+    PAYER_QUESTION,
+    REPEAT_GIVE_UP,
     amount_question,
     charge_question,
+    dropped_payer_question,
     ground_payers,
+    item_labels,
+    payer_answers,
+    repeat_hint,
     user_texts,
 )
 from backend.settlement import compute_settlement
@@ -53,7 +60,76 @@ def _infer_trip_payer(data, roster, current_user):
     return min(totals, key=lambda name: (-totals[name], order.get(name, len(order))))
 
 
+def _combined_question(open_questions):
+    """All of the model's open questions as one message, in order.
+
+    Showing only the first one turned three missing facts into three
+    prompts. Blank and repeated questions are dropped.
+    """
+    seen = set()
+    questions = []
+    for entry in open_questions:
+        text = " ".join(entry["question"].split())
+        if text and text.lower() not in seen:
+            seen.add(text.lower())
+            questions.append(text)
+    return " ".join(questions)
+
+
+def _payer_question(data):
+    """Ask about the one item missing a payer, or the whole expense."""
+    items = data["items"]
+    missing = [index for index, item in enumerate(items) if not item.get("paidBy")]
+    if items and missing and len(missing) < len(items):
+        # "Pizza ($10)" when two items share a name, so it's clear which.
+        return ITEM_PAYER_QUESTION.format(item=item_labels(items)[missing[0]])
+    return PAYER_QUESTION
+
+
+def _last_assistant_message(conversation):
+    return next(
+        (
+            message.get("content", "")
+            for message in reversed(conversation)
+            if message.get("role") == "assistant"
+        ),
+        None,
+    )
+
+
+def _guard_repeat(result, conversation, roster, current_user):
+    """Never ask the same question twice in a row (issue #53).
+
+    The second time, ask a clearer version; if that was already asked,
+    stop and fall back to manual entry instead of looping.
+    """
+    if result.get("type") != "question":
+        return result
+
+    question = result["question"]
+    hint = repeat_hint(question, roster, current_user)
+    previous = _last_assistant_message(conversation)
+
+    if previous is not None and previous.strip() == hint:
+        logger.info("loop guard fired: %s", "give_up")
+        return {"type": "unresolved", "reason": REPEAT_GIVE_UP}
+    if previous is not None and previous.strip() == question.strip():
+        logger.info("loop guard fired: %s", "hint")
+        return {"type": "question", "question": hint}
+    return result
+
+
 def parse_turn(*, llm, conversation, roster, current_user):
+    result = _parse_once(
+        llm=llm,
+        conversation=conversation,
+        roster=roster,
+        current_user=current_user,
+    )
+    return _guard_repeat(result, conversation, roster, current_user)
+
+
+def _parse_once(*, llm, conversation, roster, current_user):
     try:
         raw = llm.parse(
             messages=conversation,
@@ -89,13 +165,15 @@ def parse_turn(*, llm, conversation, roster, current_user):
     if data["openQuestions"]:
         return {
             "type": "question",
-            "question": data["openQuestions"][0]["question"],
+            "question": _combined_question(data["openQuestions"]),
         }
 
     # Issue #49: don't trust the LLM's payer or amounts on their own.
     # Clear any payer the user never stated, so "Who paid?" is asked.
+    # A plain answer to the app's own payer question counts (#53).
     texts = user_texts(conversation)
-    data, _ = ground_payers(data, texts, current_user)
+    answers = payer_answers(conversation, roster, current_user)
+    data, _ = ground_payers(data, texts, current_user, answers)
 
     payer = (
         current_user
@@ -111,7 +189,7 @@ def parse_turn(*, llm, conversation, roster, current_user):
     if payer is None:
         return {
             "type": "question",
-            "question": "Who paid for this expense?",
+            "question": _payer_question(data),
         }
 
     if payer not in roster:
@@ -122,7 +200,11 @@ def parse_turn(*, llm, conversation, roster, current_user):
             ),
         }
 
-    grounding_question = amount_question(data, texts) or charge_question(data, texts)
+    grounding_question = (
+        dropped_payer_question(data, conversation, roster, current_user)
+        or amount_question(data, texts)
+        or charge_question(data, texts)
+    )
     if grounding_question:
         return {"type": "question", "question": grounding_question}
 

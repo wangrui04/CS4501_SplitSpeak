@@ -8,7 +8,7 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
-PROMPT_VERSION = "2026-11-02.3"
+PROMPT_VERSION = "2026-11-16.1"
 
 LLM_MAX_ATTEMPTS = 2
 LLM_MAX_TOKENS = 16000
@@ -77,6 +77,11 @@ the full revised expense, not just the change.
 How to ask clarification questions:
 - If a fact is simply missing (a price, who paid, a tax or tip amount), \
 ask for it directly.
+- When several facts are missing or unclear, ask for all of them in one \
+question, in one openQuestions entry. Do not ask one fact per turn: the \
+user has only a few messages per expense. Example (made-up items): "What \
+did the salad and the soup each cost, and should the bread be split \
+equally between you and Alex?"
 - If you are unsure how to split something, do not ask an open "either/or" \
 question such as "should X be split by nights or equally?". Instead, \
 restate the complete interpretation you plan to use, covering every item: \
@@ -186,3 +191,18 @@ GROUNDING_NONE_WORDS = ("no", "without", "zero", "didnt", "didn't", "never", "sk
 GROUNDING_COVERED_AFTER_WORDS = ("included", "incl", "inclusive", "free", "waived")
 # How many other words may sit between a covering word and the charge word.
 GROUNDING_COVER_WINDOW_WORDS = 3
+# Words that make a "Who paid…?" question ask for more than the payer
+# ("Who paid, and how should it be split?"). A one-name reply to such a
+# question is not taken as the payer.
+GROUNDING_NOT_ONLY_PAYER_WORDS = (
+    "and who",
+    "how",
+    "split",
+    "share",
+    "shared",
+    "sharing",
+    "much",
+    "cost",
+    "each",
+    "price",
+)
