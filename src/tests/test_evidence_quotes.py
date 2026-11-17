@@ -333,3 +333,83 @@ def test_one_name_answer_to_the_charges_question_previews():
     assert result["type"] == "preview", result.get("question")
     paid = {entry["name"]: entry["cents"] for entry in result["preview"]["paid"]}
     assert paid == {"Sarah": 900, "Kayla": 0, "Rui": 3300}
+
+
+# ------------------- live retest: the model leaves the payer empty after "rui"
+
+from backend.grounding import CHARGES_PAYER_QUESTION, repeat_hint  # noqa: E402
+
+
+def answered(question, reply, raw, current_user="Kayla"):
+    return parse_turn(
+        llm=FakeLlmClient([raw]),
+        conversation=[
+            {"role": "user", "content": TACOS},
+            {"role": "assistant", "content": question},
+            {"role": "user", "content": reply},
+        ],
+        roster=ROSTER,
+        current_user=current_user,
+    )
+
+
+def test_answer_to_app_charges_question_fills_an_empty_payer():
+    result = answered("Who paid the tax and tip?", "rui", tacos_parsed(payer=None))
+
+    assert result["type"] == "preview", result.get("question")
+    paid = {entry["name"]: entry["cents"] for entry in result["preview"]["paid"]}
+    assert paid == {"Sarah": 900, "Kayla": 0, "Rui": 3300}
+
+
+def test_answer_never_overrides_a_payer_the_model_set():
+    result = answered("Who paid the tax and tip?", "rui", tacos_parsed(payer="Sarah"))
+
+    assert result["type"] == "preview", result.get("question")
+    assert result["preview"]["payer"] == "Sarah"
+
+
+def test_answer_to_an_ai_worded_question_does_not_fill_the_payer():
+    raw = parsed([item("Lunch", "20", mode="all")])
+
+    result = parse_turn(
+        llm=FakeLlmClient([raw]),
+        conversation=[
+            {"role": "user", "content": "lunch was 20"},
+            {"role": "assistant", "content": "Who paid?"},
+            {"role": "user", "content": "rui"},
+        ],
+        roster=ROSTER,
+        current_user="Kayla",
+    )
+
+    assert result["type"] == "question"
+
+
+def test_answer_to_app_item_question_fills_that_items_payer():
+    items = [
+        item("Pizza", "10", ["ME", "Rui"]),
+        item("Pizza", "15", ["Sarah", "Rui"], paidBy="Sarah"),
+    ]
+
+    result = parse_turn(
+        llm=FakeLlmClient([parsed(items)]),
+        conversation=[
+            {"role": "user", "content": "a $10 pizza with Rui and Sarah paid for a $15 pizza"},
+            {"role": "assistant", "content": "Who paid for Pizza ($10)?"},
+            {"role": "user", "content": "Rui"},
+        ],
+        roster=ROSTER,
+        current_user="Kayla",
+    )
+
+    assert result["type"] == "preview", result.get("question")
+    paid = {entry["name"]: entry["cents"] for entry in result["preview"]["paid"]}
+    assert paid == {"Sarah": 1500, "Kayla": 0, "Rui": 1000}
+
+
+def test_charges_question_hint_names_the_charges():
+    question = CHARGES_PAYER_QUESTION.format(charges="the tax and tip")
+
+    assert repeat_hint(question, ROSTER, "Kayla") == (
+        "I still need to know who paid the tax and tip. Reply with just a name, e.g. Sarah."
+    )
