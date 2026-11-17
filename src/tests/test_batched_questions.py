@@ -94,3 +94,9 @@ def test_repeated_batch_still_triggers_the_loop_guard():
 def test_system_prompt_asks_for_missing_facts_together():
     assert "ask for all of them in one question" in SYSTEM_PROMPT
     assert "Do not ask one fact per turn" in SYSTEM_PROMPT
+
+
+def test_system_prompt_keeps_weights_on_the_items_they_were_given_for():
+    """Live B4 failure: nights for the house were applied to every item."""
+    assert "Apply weights only to the items the user tied them to" in SYSTEM_PROMPT
+    assert "don't spread them over every item yourself" in SYSTEM_PROMPT

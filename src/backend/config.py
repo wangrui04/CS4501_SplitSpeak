@@ -8,7 +8,7 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Bump whenever SYSTEM_PROMPT changes so benchmark results stay comparable.
-PROMPT_VERSION = "2026-11-17.2"
+PROMPT_VERSION = "2026-11-17.3"
 
 LLM_MAX_ATTEMPTS = 2
 LLM_MAX_TOKENS = 16000
@@ -81,6 +81,12 @@ nights [2, 4, 1], or [1, 3] when one person covers three times as much \
 as another. Leave weights null for an equal split. When the user gives \
 only a vague rule (e.g. "however makes sense"), propose a split rule \
 for each item and confirm it (see below) before using it.
+- Apply weights only to the items the user tied them to. If the user \
+gives weights (for example nights stayed at a cabin) but doesn't say \
+which items they apply to, don't spread them over every item yourself: \
+shared food or rides may be split equally. Restate the plan item by item \
+and ask the user to confirm it (see below) instead of finishing the \
+expense.
 - A refund on an item goes in that item's refund with the amount and who \
 received it. Keep unitPrice as the original price.
 - When the conversation includes a correction ("actually", "wait"), return \
