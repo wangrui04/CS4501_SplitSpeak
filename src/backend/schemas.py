@@ -46,6 +46,9 @@ class Item(StrictModel):
     paidBy: str | None = None
     weights: list[Weight] | None = None
     refund: Refund | None = None
+    # The user's exact words behind the price and the payer (issue #55).
+    priceEvidence: str | None = None
+    payerEvidence: str | None = None
 
 
 class Charge(StrictModel):
@@ -53,6 +56,8 @@ class Charge(StrictModel):
     amount: Money | None
     percent: Money | None
     method: Literal["proportional", "equal"] | None
+    # The user's exact words stating this charge (issue #55).
+    amountEvidence: str | None = None
 
     @model_validator(mode="after")
     def one_or_other(self):

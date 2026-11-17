@@ -130,6 +130,11 @@ def _names_person(
 
 PAYER_QUESTION = "Who paid for this expense?"
 ITEM_PAYER_QUESTION = "Who paid for {item}?"
+CHARGES_PAYER_QUESTION = "Who paid {charges}?"
+CHARGES_PAYER_HINT = (
+    "I still need to know who paid {charges}. "
+    "Reply with just a name, e.g. {example}."
+)
 PAYER_HINT = (
     "I still need to know who paid for this expense. "
     "Reply with just a name, e.g. {example}."
@@ -160,8 +165,8 @@ def _template_pattern(template: str) -> re.Pattern:
     for index, part in enumerate(parts):
         if index % 2 == 0:
             pattern += re.escape(part)
-        elif part == "item":
-            pattern += "(?P<item>.+)"
+        elif part in ("item", "charges"):
+            pattern += f"(?P<{part}>.+)"
         else:
             pattern += ".+"
     return re.compile(f"^{pattern}$")
@@ -169,6 +174,10 @@ def _template_pattern(template: str) -> re.Pattern:
 
 _EXPENSE_QUESTIONS = [_template_pattern(PAYER_QUESTION), _template_pattern(PAYER_HINT)]
 _ITEM_QUESTIONS = [_template_pattern(ITEM_PAYER_QUESTION), _template_pattern(ITEM_PAYER_HINT)]
+_CHARGES_QUESTIONS = [
+    _template_pattern(CHARGES_PAYER_QUESTION),
+    _template_pattern(CHARGES_PAYER_HINT),
+]
 _ONLY_PAYER_BLOCKERS = re.compile(
     r"\b(?:" + "|".join(map(re.escape, config.GROUNDING_NOT_ONLY_PAYER_WORDS)) + r")\b"
 )
@@ -190,20 +199,25 @@ def _asks_only_who_paid(text: str) -> bool:
 
 
 def _payer_question_target(text: str):
-    """None if text isn't a payer question, else (kind, label).
+    """None if text isn't a payer question, else (kind, label, from_app).
 
-    kind is "expense" or "item"; label is the item the question names,
-    which ground_payers() matches against the current items.
+    kind is "expense", "charges", or "item"; label is the item or charges
+    the question names. from_app is True for the app's own templates: only
+    answers to those may fill in a payer the model left empty.
     """
     text = text.strip()
     if any(pattern.match(text) for pattern in _EXPENSE_QUESTIONS):
-        return ("expense", None)
+        return ("expense", None, True)
+    for pattern in _CHARGES_QUESTIONS:
+        match = pattern.match(text)
+        if match and match.group("charges").startswith("the "):
+            return ("charges", match.group("charges"), True)
     for pattern in _ITEM_QUESTIONS:
         match = pattern.match(text)
         if match and (pattern is not _ITEM_QUESTIONS[0] or _asks_only_who_paid(text)):
-            return ("item", match.group("item"))
+            return ("item", match.group("item"), True)
     if _asks_only_who_paid(text):
-        return ("expense", None)
+        return ("expense", None, False)
     return None
 
 
@@ -252,9 +266,11 @@ def repeat_hint(question: str, roster: list[str], current_user: str) -> str:
     target = _payer_question_target(question)
     if target is None:
         return REPEAT_HINT.format(question=question)
-    kind, label = target
+    kind, label, _ = target
     if kind == "item":
         return ITEM_PAYER_HINT.format(item=label, example=example)
+    if kind == "charges":
+        return CHARGES_PAYER_HINT.format(charges=label, example=example)
     return PAYER_HINT.format(example=example)
 
 
@@ -280,8 +296,8 @@ def payer_answers(
 ) -> list[tuple[str | None, str]]:
     """Who the user named in reply to a payer question, oldest first.
 
-    Each entry is (item label or None, person), with ME for the signed-in
-    user. Only one-name replies to questions that ask just "who paid"
+    Each entry is (item label or None, person, from_app), with ME for the
+    signed-in user. Only one-name replies to questions that ask just "who paid"
     count (the app's own, or the LLM's); ground_payers() decides which
     item, if any, each one refers to.
     """
@@ -294,35 +310,44 @@ def payer_answers(
             continue
         person = _single_person(reply.get("content", ""), roster, current_user)
         if person is not None:
-            answers.append((target[1], person))
+            kind, label, from_app = target
+            answers.append((label if kind == "item" else None, person, from_app))
     return answers
 
 
 def _resolve_answers(answers, items, description):
-    """(answer for the whole expense, {item index: person}).
+    """Who the user's answers name, for the whole expense and per item.
 
-    An answer about an item the app can't match counts for the whole
-    expense only when there is just one item, or the question named the
-    expense itself ("Who paid for dinner?"). Otherwise it is ignored, so
-    "Who paid for the first pizza?" -> "Rui" can't make Rui the payer of
-    every item.
+    Returns (expense, {item index: person}, fill_expense, {index: person}).
+    The first two only confirm payers the model set. The fill values come
+    from the app's own questions and may fill in a payer the model left
+    empty. An answer about an item the app can't match counts for the
+    whole expense only when there is just one item, or the question named
+    the expense itself ("Who paid for dinner?"); otherwise it is ignored,
+    so "Who paid for the first pizza?" -> "Rui" can't make Rui the payer
+    of every item.
     """
     labels = item_labels(items)
-    expense_answer = None
+    expense_answer = fill_expense = None
     item_answers = {}
-    for label, person in answers:
+    fill_items = {}
+    for label, person, from_app in answers:
         if label is None:
             expense_answer = person
+            fill_expense = person if from_app else None
             continue
         index = _match_label(label, labels)
         if index is not None:
             item_answers[index] = person
+            if from_app:
+                fill_items[index] = person
             if len(items) == 1:
                 # "Who paid for the lunch?" when lunch is the whole expense.
                 expense_answer = person
         elif len(items) <= 1 or _match_label(label, [description or ""]) is not None:
             expense_answer = person
-    return expense_answer, item_answers
+            fill_expense = None
+    return expense_answer, item_answers, fill_expense, fill_items
 
 
 # -------------------------------------------------------------------- payer
@@ -384,7 +409,7 @@ def ground_payers(
     current_user: str,
     answers: list | None = None,
 ) -> tuple[dict, list[str]]:
-    """Copy of data with any payer the user never stated cleared.
+    """Copy of data with unstated payers cleared and answered ones filled.
 
     A payer counts as stated when a message ties them to a payment word,
     or when the user named them alone in reply to a question asking only
@@ -394,7 +419,7 @@ def ground_payers(
     grounded = copy.deepcopy(data)
     clauses = _clauses(texts)
     items = grounded.get("items", [])
-    answered_expense, item_answers = _resolve_answers(
+    answered_expense, item_answers, fill_expense, fill_items = _resolve_answers(
         answers or [], items, grounded.get("description")
     )
     fired = []
@@ -425,6 +450,17 @@ def ground_payers(
             cleared_item = True
     if cleared_item:
         fired.append("item_payer")
+
+    # The user named one person in reply to the app's own payer question,
+    # but the model left that payer empty: use the answer. Never replaces
+    # a payer the model set, so later corrections still win.
+    if grounded.get("payer") is None and fill_expense is not None:
+        grounded["payer"] = fill_expense
+        logger.info("grounding filled: %s", "payer")
+    for index, person in fill_items.items():
+        if not items[index].get("paidBy"):
+            items[index]["paidBy"] = person
+            logger.info("grounding filled: %s", "item_payer")
 
     for check in fired:
         logger.info("grounding check fired: %s", check)
@@ -467,6 +503,136 @@ def dropped_payer_question(
             continue
         logger.info("grounding check fired: %s", "dropped_payer")
         return question
+    return None
+
+
+# ----------------------------------------------------------- evidence (#55)
+#
+# The model quotes the user's exact words behind each item's price and
+# payer and each charge's amount. A quote that isn't in the user's
+# messages word for word (a paraphrase) proves nothing and is ignored, so
+# the checks above still decide. A word-for-word quote that contradicts
+# the value it backs ("tip 18" for an $18 tax) is rejected.
+
+_QUOTE_TOKEN = re.compile(
+    r"\$?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?%?|\$?\.\d+%?|[a-z0-9']+"
+)
+_PERCENT_WORDS = ("percent", "pct")
+
+
+def _normalize(text: str) -> str:
+    text = text.lower().replace("’", "'")
+    return " ".join(text.split()).strip(" \"'.,;:!?")
+
+
+def _verbatim(quote, texts: list[str]) -> str | None:
+    """The normalized quote if it appears in a user message, else None."""
+    if not quote or not quote.strip():
+        return None
+    normalized = _normalize(quote)
+    if normalized and any(normalized in _normalize(text) for text in texts):
+        return normalized
+    return None
+
+
+def _quote_tokens(quote: str) -> list[tuple[str, Decimal | None, bool]]:
+    """(token, number or None, is_percent) for each token in a quote."""
+    raw = _QUOTE_TOKEN.findall(quote)
+    tokens = []
+    for index, token in enumerate(raw):
+        stripped = token.lstrip("$").rstrip("%").replace(",", "")
+        number = None
+        if stripped and (stripped[0].isdigit() or stripped[0] == "."):
+            number = _decimal(stripped)
+        following = raw[index + 1] if index + 1 < len(raw) else ""
+        is_percent = number is not None and (token.endswith("%") or following in _PERCENT_WORDS)
+        tokens.append((token, number, is_percent))
+    return tokens
+
+
+def _item_amounts(item: dict) -> set[Decimal]:
+    price = _decimal(item.get("unitPrice"))
+    if price is None:
+        return set()
+    return {price, price * (item.get("quantity") or 1)}
+
+
+def _price_quote_ok(quote: str, item: dict) -> bool:
+    numbers = {n for _, n, pct in _quote_tokens(quote) if n is not None and not pct}
+    return bool(numbers & _item_amounts(item))
+
+
+def _payer_quote_ok(quote: str, item: dict, current_user: str) -> bool:
+    if not any(_says_paid(words, item["paidBy"], current_user) for words in _clauses([quote])):
+        return False
+    # A quote about another item ("Rui bought a $20 pizza" on the $10 one).
+    numbers = {n for _, n, pct in _quote_tokens(quote) if n is not None and not pct}
+    return not numbers or bool(numbers & _item_amounts(item))
+
+
+def _charge_quote_ok(quote: str, charge: dict) -> bool:
+    tokens = _quote_tokens(quote)
+    words = [token for token, number, _ in tokens]
+    kind_positions = [
+        index
+        for index in range(len(words))
+        for phrase in _CHARGE_WORDS[charge["kind"]]
+        if _phrase_at(words, index, phrase)
+    ]
+    numbers = [(index, n, pct) for index, (_, n, pct) in enumerate(tokens) if n is not None]
+    if not kind_positions or not numbers:
+        return False
+
+    # The charge's number is the one nearest its own word; on a tie, the
+    # one after it ("tax was $6 and tip was 14.40": tip -> 14.40).
+    def nearness(entry):
+        index = entry[0]
+        distance = min(abs(index - pos) for pos in kind_positions)
+        after = any(index > pos for pos in kind_positions if abs(index - pos) == distance)
+        return (distance, not after)
+
+    _, number, is_percent = min(numbers, key=nearness)
+    amount = _decimal(charge.get("amount"))
+    percent = _decimal(charge.get("percent"))
+    if percent is not None:
+        return is_percent and number == percent
+    return amount is not None and not is_percent and number == amount
+
+
+def ground_payer_evidence(
+    data: dict, texts: list[str], current_user: str
+) -> tuple[dict, list[str]]:
+    """Copy of data with any per-item payer its own quote contradicts cleared.
+
+    Clearing paidBy makes the pipeline ask "Who paid for <item>?".
+    """
+    grounded = copy.deepcopy(data)
+    fired = []
+    for item in grounded.get("items", []):
+        if not item.get("paidBy"):
+            continue
+        quote = _verbatim(item.get("payerEvidence"), texts)
+        if quote is not None and not _payer_quote_ok(quote, item, current_user):
+            item["paidBy"] = None
+            if "payer_evidence" not in fired:
+                fired.append("payer_evidence")
+    for check in fired:
+        logger.info("grounding check fired: %s", check)
+    return grounded, fired
+
+
+def evidence_question(data: dict, texts: list[str]) -> str | None:
+    """A question for the first price or charge its own quote contradicts."""
+    for item in data.get("items", []):
+        quote = _verbatim(item.get("priceEvidence"), texts)
+        if quote is not None and item.get("unitPrice") is not None and not _price_quote_ok(quote, item):
+            logger.info("grounding check fired: %s", "price_evidence")
+            return f"How much was {item['name']}?"
+    for charge in data.get("charges", []):
+        quote = _verbatim(charge.get("amountEvidence"), texts)
+        if quote is not None and not _charge_quote_ok(quote, charge):
+            logger.info("grounding check fired: %s", "charge_evidence")
+            return f"How much was the {charge['kind']}?"
     return None
 
 
@@ -556,6 +722,19 @@ def _join_kinds(kinds: list[str]) -> str:
     if len(kinds) == 2:
         return f"the {kinds[0]} and {kinds[1]}"
     return "the " + ", ".join(kinds[:-1]) + f", and {kinds[-1]}"
+
+
+def charges_payer_question(charges: list[dict]) -> str:
+    """"Who paid the tax and tip?" when every item already has a payer.
+
+    It starts with "Who paid" and asks nothing else, so a one-name reply
+    counts as the main payer (see payer_answers()).
+    """
+    kinds = []
+    for charge in charges:
+        if charge["kind"] not in kinds:
+            kinds.append(charge["kind"])
+    return CHARGES_PAYER_QUESTION.format(charges=_join_kinds(kinds))
 
 
 def charge_question(data: dict, texts: list[str]) -> str | None:

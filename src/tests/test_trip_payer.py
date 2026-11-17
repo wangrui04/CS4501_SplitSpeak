@@ -97,7 +97,7 @@ def test_still_asks_when_tax_or_tip_has_no_payer():
     result = run(parsed(b4_items(), charges=[tip]))
 
     assert result["type"] == "question"
-    assert result["question"] == "Who paid for this expense?"
+    assert result["question"] == "Who paid the tip?"
 
 
 def test_explicit_payer_still_wins():

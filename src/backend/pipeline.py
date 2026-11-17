@@ -22,7 +22,10 @@ from backend.grounding import (
     REPEAT_GIVE_UP,
     amount_question,
     charge_question,
+    charges_payer_question,
     dropped_payer_question,
+    evidence_question,
+    ground_payer_evidence,
     ground_payers,
     item_labels,
     payer_answers,
@@ -84,6 +87,9 @@ def _payer_question(data):
     if items and missing and len(missing) < len(items):
         # "Pizza ($10)" when two items share a name, so it's clear which.
         return ITEM_PAYER_QUESTION.format(item=item_labels(items)[missing[0]])
+    if items and not missing and data["charges"]:
+        # Every item has a payer; only the tax/tip/fee is unclaimed.
+        return charges_payer_question(data["charges"])
     return PAYER_QUESTION
 
 
@@ -184,6 +190,8 @@ def _parse_once(*, llm, conversation, roster, current_user):
     texts = user_texts(conversation)
     answers = payer_answers(conversation, roster, current_user)
     data, _ = ground_payers(data, texts, current_user, answers)
+    # Issue #55: a per-item payer whose own quote contradicts it.
+    data, _ = ground_payer_evidence(data, texts, current_user)
 
     payer = (
         current_user
@@ -212,6 +220,7 @@ def _parse_once(*, llm, conversation, roster, current_user):
 
     grounding_question = (
         dropped_payer_question(data, conversation, roster, current_user)
+        or evidence_question(data, texts)
         or amount_question(data, texts)
         or charge_question(data, texts)
     )
