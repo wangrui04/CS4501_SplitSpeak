@@ -3,6 +3,7 @@ import logging
 
 from pydantic import ValidationError
 
+from backend.config import OUT_OF_SCOPE_MESSAGES
 from backend.llm import LlmError
 from backend.schemas import ParsedExpense
 from backend.allocation import (
@@ -161,6 +162,15 @@ def _parse_once(*, llm, conversation, roster, current_user):
         }
 
     data = parsed.model_dump()
+
+    # Issue #54: loans and non-expenses get a fixed reply on the first
+    # turn instead of questions that can never lead to a valid preview.
+    if data["unsupported"]:
+        logger.info("out of scope: %s", data["unsupported"])
+        return {
+            "type": "unresolved",
+            "reason": OUT_OF_SCOPE_MESSAGES[data["unsupported"]],
+        }
 
     if data["openQuestions"]:
         return {

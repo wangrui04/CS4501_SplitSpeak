@@ -75,6 +75,9 @@ class ParsedExpense(StrictModel):
     charges: list[Charge]
     statedTotal: Money | None
     openQuestions: list[OpenQuestion]
+    # Set when the message isn't a shared expense (issue #54): a loan,
+    # interest, or repayment ("loan"), or no expense at all ("other").
+    unsupported: Literal["loan", "other"] | None = None
 
 
 class Share(StrictModel):
