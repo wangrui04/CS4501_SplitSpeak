@@ -13,6 +13,25 @@ async function signIn(page) {
   await expect(
     page.getByRole('heading', { name: 'Apartment 4B' })
   ).toBeVisible();
+
+  await openFreshGroup(page);
+}
+
+// Each test gets its own group (Sarah, Kayla, Rui) so its expenses never
+// leak into another test's balances or into the Apartment 4B smoke tests,
+// which share the same in-memory database. Names stay unique on retries.
+async function openFreshGroup(page) {
+  const groupName = `Edit test ${Date.now()}`;
+
+  await page.getByRole('button', { name: 'Create a group' }).first().click();
+  await page.getByLabel('Group name').fill(groupName);
+  await page.getByLabel('Group members (optional)').fill('Kayla, Rui');
+  await page.getByRole('button', { name: 'Create group' }).click();
+
+  // The app switches to a newly created group.
+  await expect(
+    page.getByRole('heading', { level: 1, name: groupName })
+  ).toBeVisible();
 }
 
 async function createExpense(page) {
@@ -46,9 +65,10 @@ async function createExpense(page) {
 }
 
 async function openExpense(page, name) {
+  // The whole row is a button now; it sits on top of the title text.
   await page.getByRole('region', {
     name: 'Expenses',
-  }).getByText(name, { exact: true }).click();
+  }).getByRole('button', { name: `View ${name} expense details` }).click();
 
   const modal = page.getByRole('dialog', {
     name: 'Expense details',
@@ -66,7 +86,7 @@ test('saved expense opens a detailed breakdown', async ({
   const modal = await openExpense(page, name);
 
   await expect(
-    modal.getByText(name, { exact: true })
+    modal.getByRole('heading', { name, exact: true })
   ).toBeVisible();
 
   await expect(
@@ -151,7 +171,7 @@ test('canceling changes keeps original expense', async ({
   }).click();
 
   await expect(
-    modal.getByText(name, { exact: true })
+    modal.getByRole('heading', { name, exact: true })
   ).toBeVisible();
 
   await expect(
